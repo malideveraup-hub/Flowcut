@@ -191,13 +191,11 @@ export async function resendEmailOtp({ email }) {
   if (!user || user.isDeleted || user.emailVerified) throw new AppError(400, 'This account does not need verification.');
 
   const otp = String(crypto.randomInt(100000, 1000000));
+  await sendOtpEmail(normalizedEmail, otp);
   user.otpHash = crypto.createHash('sha256').update(otp).digest('hex');
   user.otpExpiresAt = new Date(Date.now() + OTP_TTL_MS);
   user.otpAttempts = 0;
   user.otpSentAt = new Date();
-  await user.save({ validateBeforeSave: false });
-  await sendOtpEmail(normalizedEmail, otp);
-  user.otpExpiresAt = new Date(Date.now() + OTP_TTL_MS);
   await user.save({ validateBeforeSave: false });
   return { email: normalizedEmail, expiresAt: user.otpExpiresAt.toISOString() };
 }

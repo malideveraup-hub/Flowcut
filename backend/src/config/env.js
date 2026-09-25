@@ -28,10 +28,10 @@ function loadEnv() {
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
     corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
     smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
-    smtpPort: Number(process.env.SMTP_PORT) || 465,
-    smtpUser: process.env.SMTP_USER || '',
-    smtpPass: process.env.SMTP_PASS || '',
-    mailFrom: process.env.MAIL_FROM || process.env.SMTP_USER || '',
+    smtpPort: Number(process.env.SMTP_PORT) || 587,
+    smtpUser: (process.env.SMTP_USER || '').trim(),
+    smtpPass: (process.env.SMTP_PASS || '').replace(/\s+/g, ''),
+    mailFrom: (process.env.MAIL_FROM || process.env.SMTP_USER || '').trim(),
   };
 }
 
