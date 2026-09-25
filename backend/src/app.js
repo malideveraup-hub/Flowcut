@@ -14,6 +14,7 @@ import adminRoutes from './routes/adminRoutes.js';
 
 export function createApp() {
   const app = express();
+  app.set('trust proxy', 1);
 
   app.use(helmet());
   app.use(

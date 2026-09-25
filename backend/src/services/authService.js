@@ -25,6 +25,12 @@ import { sendOtpEmail } from './mailService.js';
 const SALT_ROUNDS = 12;
 const OTP_TTL_MS = 10 * 60 * 1000;
 
+function sendRegistrationOtpEmail(email, otp) {
+  sendOtpEmail(email, otp).catch((err) => {
+    console.error('[mail] Registration OTP delivery failed:', err.message);
+  });
+}
+
 /**
  * The ONLY shape of user data that ever leaves this service. passwordHash
  * never appears here — not omitted by convention, structurally absent.
@@ -106,9 +112,7 @@ export async function registerCustomer({ name, lastName, email, password, termsA
       existingEmail.otpAttempts = 0;
       existingEmail.otpSentAt = new Date();
       await existingEmail.save({ validateBeforeSave: false });
-      await sendOtpEmail(normalizedEmail, otp);
-      existingEmail.otpExpiresAt = new Date(Date.now() + OTP_TTL_MS);
-      await existingEmail.save({ validateBeforeSave: false });
+      sendRegistrationOtpEmail(normalizedEmail, otp);
       return { email: normalizedEmail, expiresAt: existingEmail.otpExpiresAt.toISOString() };
     }
     throw new AppError(409, 'This Gmail is already registered.', { email: 'Already registered.' });
@@ -147,14 +151,7 @@ export async function registerCustomer({ name, lastName, email, password, termsA
   user.otpSentAt = new Date();
   await user.save({ validateBeforeSave: false });
 
-  try {
-    await sendOtpEmail(normalizedEmail, otp);
-    user.otpExpiresAt = new Date(Date.now() + OTP_TTL_MS);
-    await user.save({ validateBeforeSave: false });
-  } catch (err) {
-    await User.findByIdAndDelete(user._id);
-    throw err;
-  }
+  sendRegistrationOtpEmail(normalizedEmail, otp);
 
   return { email: normalizedEmail, expiresAt: user.otpExpiresAt.toISOString() };
 }

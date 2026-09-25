@@ -20,9 +20,6 @@ async function start() {
 
   const app = createApp();
 
-  // Trust Render's reverse proxy for express-rate-limit
-  app.set('trust proxy', 1);
-
   app.listen(env.port, '0.0.0.0', () => {
     console.log(`[server] FlowCut API listening on http://localhost:${env.port}`);
     console.log(`[server] Environment: ${env.nodeEnv}`);
