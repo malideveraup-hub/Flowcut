@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 const smtpIpv4 = env.resendApiKey ? null : (await dns.resolve4(env.smtpHost))[0];
+console.log(`[mail] Provider: ${env.resendApiKey ? 'resend' : 'smtp'}`);
 if (smtpIpv4) console.log(`[mail] SMTP target: ${smtpIpv4}:${env.smtpPort}`);
 
 const transporter = env.resendApiKey
@@ -36,6 +37,7 @@ export async function sendOtpEmail(email, otp) {
     });
 
     if (!response.ok) {
+      console.error(`[mail] Resend rejected email: HTTP ${response.status} ${await response.text()}`);
       throw new AppError(503, 'Email delivery is temporarily unavailable. Please try again.');
     }
     return;
