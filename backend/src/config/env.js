@@ -32,6 +32,7 @@ function loadEnv() {
     smtpUser: (process.env.SMTP_USER || '').trim(),
     smtpPass: (process.env.SMTP_PASS || '').replace(/\s+/g, ''),
     mailFrom: (process.env.MAIL_FROM || process.env.SMTP_USER || '').trim(),
+    resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
   };
 }
 
