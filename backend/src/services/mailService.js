@@ -5,6 +5,7 @@ import { AppError } from '../middleware/errorHandler.js';
 const transporter = nodemailer.createTransport({
   host: env.smtpHost,
   port: env.smtpPort,
+  family: 4,
   secure: env.smtpPort === 465,
   requireTLS: env.smtpPort === 587,
   connectionTimeout: 10_000,
