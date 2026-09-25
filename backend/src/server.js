@@ -1,7 +1,10 @@
+import { setDefaultResultOrder } from 'node:dns';
 import { env } from './config/env.js';
 import { connectDB } from './config/db.js';
 import { createApp } from './app.js';
 import User from './models/User.js';
+
+setDefaultResultOrder('ipv4first');
 
 async function start() {
   try {
