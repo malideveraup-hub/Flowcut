@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 const [smtpIpv4] = await dns.resolve4(env.smtpHost);
+console.log(`[mail] SMTP target: ${smtpIpv4}:${env.smtpPort}`);
 
 const transporter = nodemailer.createTransport({
   host: smtpIpv4,

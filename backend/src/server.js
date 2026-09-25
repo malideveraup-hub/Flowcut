@@ -26,6 +26,7 @@ async function start() {
   app.listen(env.port, '0.0.0.0', () => {
     console.log(`[server] FlowCut API listening on http://localhost:${env.port}`);
     console.log(`[server] Environment: ${env.nodeEnv}`);
+    console.log(`[server] Git commit: ${process.env.RENDER_GIT_COMMIT || 'local'}`);
     console.log(`[server] Health check: http://localhost:${env.port}/api/health`);
   });
 }
