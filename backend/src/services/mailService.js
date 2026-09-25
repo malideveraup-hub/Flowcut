@@ -1,16 +1,16 @@
 import nodemailer from 'nodemailer';
-import { setDefaultResultOrder } from 'node:dns';
+import dns from 'node:dns/promises';
 import { env } from '../config/env.js';
 import { AppError } from '../middleware/errorHandler.js';
 
-setDefaultResultOrder('ipv4first');
+const [smtpIpv4] = await dns.resolve4(env.smtpHost);
 
 const transporter = nodemailer.createTransport({
-  host: env.smtpHost,
+  host: smtpIpv4,
   port: env.smtpPort,
-  family: 4,
   secure: env.smtpPort === 465,
   requireTLS: env.smtpPort === 587,
+  tls: { servername: env.smtpHost },
   connectionTimeout: 10_000,
   greetingTimeout: 10_000,
   socketTimeout: 10_000,
