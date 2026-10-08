@@ -3,6 +3,8 @@ import { getMeRequest, logoutRequest } from '../api/authApi';
 
 const AuthContext = createContext(null);
 
+const normalizeRole = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
 const ROLE_HOME = {
   customer: '/',
   barber: '/barber',
@@ -15,18 +17,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
-  console.log('[AUTH] refreshUser START');
-
   try {
     const { data } = await getMeRequest();
-
-    console.log('[AUTH] refreshUser SUCCESS', data.user);
-
-    setUser(data.user);
-    return data.user;
-  } catch (err) {
-    console.log('[AUTH] refreshUser FAILED', err);
-
+    const nextUser = data?.user ? { ...data.user, role: normalizeRole(data.user.role) } : null;
+    setUser(nextUser);
+    return nextUser;
+  } catch {
     setUser(null);
     return null;
   }
@@ -56,7 +52,7 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
-    role: user?.role || null,
+    role: normalizeRole(user?.role),
     name: user?.name || '',
     shopId: user?.shopId || null,
     consentCurrent: user ? user.consentCurrent === true : true,
@@ -64,7 +60,7 @@ export function AuthProvider({ children }) {
     setUser,
     refreshUser,
     logout,
-    homeFor: (r) => ROLE_HOME[r] || '/',
+    homeFor: (r) => ROLE_HOME[normalizeRole(r)] || '/',
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -76,4 +72,4 @@ export function useAuth() {
   return ctx;
 }
 
-export { ROLE_HOME };
+export { ROLE_HOME, normalizeRole };

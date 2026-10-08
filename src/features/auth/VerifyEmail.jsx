@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth, normalizeRole } from '../../hooks/useAuth';
 import { rateLimitMessage, resendEmailRequest, verifyEmailRequest } from '../../api/authApi';
 import { validateEmail, validateOtp } from '../../validation/authValidation';
 import Input from '../../components/ui/Input';
-import Button from '../../components/ui/Button';
 import styles from './Auth.module.css';
 
 export default function VerifyEmail() {
@@ -19,6 +18,7 @@ export default function VerifyEmail() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState('');
+  const submittingRef = useRef(false);
   const expired = remainingMs !== null && remainingMs <= 0;
 
   useEffect(() => {
@@ -39,6 +39,7 @@ export default function VerifyEmail() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (submittingRef.current) return;
     const otp = digits.join('');
     const next = { email: validateEmail(email), otp: validateOtp(otp) };
     setErrors(next);
@@ -47,14 +48,20 @@ export default function VerifyEmail() {
       setErrors({ otp: 'This code has expired. Request a new code.' });
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const { data } = await verifyEmailRequest({ email, otp });
-      setUser(data.user);
-      navigate(homeFor(data.user.role), { replace: true });
+      const authenticatedUser = {
+        ...data.user,
+        role: normalizeRole(data.user?.role),
+      };
+      setUser(authenticatedUser);
+      navigate(homeFor(authenticatedUser.role), { replace: true });
     } catch (err) {
       setErrors({ otp: err.message });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -80,11 +87,13 @@ export default function VerifyEmail() {
   }
 
   async function resend() {
+    if (submittingRef.current) return;
     const emailError = validateEmail(email);
     if (emailError) {
       setErrors({ email: emailError });
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     setNotice('');
     try {
@@ -96,34 +105,45 @@ export default function VerifyEmail() {
     } catch (err) {
       setErrors({ email: rateLimitMessage(err) });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
 
   return (
-    <div className={styles.wrap}>
-      <div className={styles.card}>
-        <div className={styles.brand}>FLOWCUT</div>
-        <h1 className={styles.title}>Verify your Gmail</h1>
-        <p>Enter the 6-digit code sent to your Gmail before logging in.</p>
-        <form onSubmit={handleSubmit} noValidate>
-          <Input label="Gmail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email} />
+    <div className={styles.registerPage}>
+      <header className={styles.registerHeader}>
+        <div className={styles.registerHeaderInner}>
+          <Link className={styles.registerLogo} to="/" aria-label="FlowCut home"><span className={styles.registerLogoMark} aria-hidden="true" />FLOWCUT</Link>
+          <nav className={styles.registerNav} aria-label="Main navigation"><Link to="/">Home</Link><Link to="/discover">Discover</Link></nav>
+          <Link className={styles.registerHeaderButton} to="/register-shop">Register your shop</Link>
+        </div>
+      </header>
+      <main className={styles.registerMain}>
+        <section className={styles.registerCard} aria-labelledby="verify-title">
+          <div className={styles.registerTag}><span />VERIFY YOUR EMAIL</div>
+          <h1 className={styles.registerTitle} id="verify-title">Verify your Gmail</h1>
+          <p className={styles.registerLead}>Enter the 6-digit code sent to your Gmail before logging in.</p>
+          <form className={styles.registerForm} onSubmit={handleSubmit} noValidate>
+          <div className={styles.registerInputWrap}>
+            <Input label="Gmail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email} />
+          </div>
           <div>
-            <label htmlFor="otp-0">Verification code</label>
+            <label className={styles.registerOtpLabel} htmlFor="otp-0">Verification code</label>
             {remainingMs !== null && (
-              <div className={expired ? styles.otpExpired : styles.otpTimer}>
+              <div className={expired ? styles.registerOtpExpired : styles.registerOtpTimer}>
                 {expired
                   ? 'Code expired. Request a new code.'
                   : `Code expires in ${String(Math.floor(remainingMs / 60000)).padStart(2, '0')}:${String(Math.floor((remainingMs % 60000) / 1000)).padStart(2, '0')}`}
               </div>
             )}
-            <div className={styles.otpGrid} onPaste={handlePaste}>
+            <div className={`${styles.otpGrid} ${styles.registerOtpGrid}`} onPaste={handlePaste}>
               {digits.map((digit, index) => (
                 <input
                   key={index}
                   id={`otp-${index}`}
                   ref={(element) => { inputRefs.current[index] = element; }}
-                  className={styles.otpInput}
+                  className={`${styles.otpInput} ${styles.registerOtpInput}`}
                   type="text"
                   inputMode="numeric"
                   autoComplete={index === 0 ? 'one-time-code' : 'off'}
@@ -135,14 +155,15 @@ export default function VerifyEmail() {
                 />
               ))}
             </div>
-            {errors.otp && <div className={styles.otpError}>{errors.otp}</div>}
+            {errors.otp && <div className={styles.registerFieldError} role="alert">{errors.otp}</div>}
           </div>
-          <Button type="submit" fullWidth disabled={submitting || expired}>{submitting ? 'Verifying…' : 'Verify Gmail'}</Button>
+          <button className={styles.registerSubmit} type="submit" disabled={submitting || expired}>{submitting ? <><span className={styles.registerSpinner} aria-hidden="true" />Verifying…</> : 'Verify Gmail'}</button>
         </form>
-        {notice && <p>{notice}</p>}
-        <button type="button" onClick={resend} disabled={submitting}>Resend code</button>
-        <div className={styles.links}><Link to="/login">Back to login</Link></div>
-      </div>
+        {notice && <p className={styles.registerNotice} role="status">{notice}</p>}
+        <button className={styles.registerResend} type="button" onClick={resend} disabled={submitting}>Resend code</button>
+        <p className={styles.registerSwitch}><Link to="/login">Back to login</Link></p>
+        </section>
+      </main>
     </div>
   );
 }

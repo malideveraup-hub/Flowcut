@@ -6,6 +6,14 @@ export function fetchOwnShop() {
   return apiRequest('/api/shop-admin/shop').then((d) => d.shop);
 }
 
+export function fetchShopDashboardSummary() {
+  return apiRequest('/api/shop-admin/dashboard-summary');
+}
+
+export function fetchOwnShopQueueQr() {
+  return apiRequest('/api/shop-admin/qr').then((d) => ({ shop: d.shop, qr: d.qr }));
+}
+
 export function updateOwnShop(fields) {
   return apiRequest('/api/shop-admin/shop', { method: 'PATCH', body: fields }).then((d) => d.shop);
 }
@@ -48,6 +56,27 @@ export function updateBarberStatus(barberId, fields) {
 
 export function fetchShopQueue() {
   return apiRequest('/api/shop-admin/queue').then((d) => d.queue);
+}
+
+export function fetchShopQueueBoard(options = {}) {
+  const params = new URLSearchParams(Object.entries(options).filter(([, value]) => value !== undefined && value !== ''));
+  return apiRequest(`/api/shop-admin/queue/board?${params.toString()}`);
+}
+
+export function setShopQueueOpen(open) {
+  return apiRequest('/api/shop-admin/queue/status', { method: 'PATCH', body: { open } });
+}
+
+export function updateShopQueueEntry(entryId, fields) {
+  return apiRequest(`/api/shop-admin/queue/${entryId}`, { method: 'PATCH', body: fields });
+}
+
+export function completeShopQueueEntry(entryId) {
+  return apiRequest(`/api/shop-admin/queue/${entryId}/complete`, { method: 'PATCH' });
+}
+
+export function moveShopQueueEntry(entryId, position) {
+  return apiRequest(`/api/shop-admin/queue/${entryId}/move`, { method: 'PATCH', body: { position } });
 }
 
 export function addWalkIn(fields) {

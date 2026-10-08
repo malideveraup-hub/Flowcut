@@ -33,6 +33,10 @@ const shopSchema = new mongoose.Schema(
       openingTime: { type: String, required: true, trim: true },
       closingTime: { type: String, required: true, trim: true },
     },
+    queueOpen: {
+      type: Boolean,
+      default: true,
+    },
 
     // A shop always starts PENDING. Nothing in this phase ever sets this
     // to APPROVED — that only happens through Super Admin approval logic
@@ -51,6 +55,13 @@ const shopSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    queueQr: {
+      token: { type: String, default: null },
+      status: { type: String, enum: ['active', 'disabled'], default: null },
+      codeId: { type: String, default: null },
+      assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      createdAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );
@@ -61,5 +72,9 @@ shopSchema.index({ status: 1 });
 // Powers "find the shop(s) this user owns" — used once shop-admin
 // authorization is implemented.
 shopSchema.index({ ownerId: 1 });
+shopSchema.index({ 'queueQr.token': 1 }, {
+  unique: true,
+  partialFilterExpression: { 'queueQr.token': { $type: 'string' } },
+});
 
 export default mongoose.model('Shop', shopSchema, 'shops');

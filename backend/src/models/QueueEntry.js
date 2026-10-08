@@ -94,6 +94,14 @@ const queueEntrySchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    arrivalDeadlineAt: {
+      type: Date,
+      default: null,
+    },
+    arrivedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -101,11 +109,15 @@ const queueEntrySchema = new mongoose.Schema(
 // Powers the single most common query: "this shop's currently
 // waiting/active queue" (e.g. status: { $in: ['WAITING','CALLED'] }).
 queueEntrySchema.index({ shopId: 1, status: 1 });
+queueEntrySchema.index({ shopId: 1, status: 1, queuePosition: 1 });
+queueEntrySchema.index({ shopId: 1, status: 1, createdAt: 1 });
+queueEntrySchema.index({ shopId: 1, barberId: 1, status: 1 });
 // Powers "this shop's queue history in order" and reporting/analytics.
 queueEntrySchema.index({ shopId: 1, createdAt: 1 });
 // Powers "does this customer already have an active entry anywhere" —
 // the duplicate-join check from earlier phases of the frontend prototype.
 queueEntrySchema.index({ customerId: 1, status: 1 });
+queueEntrySchema.index({ customerId: 1, status: 1, createdAt: -1 });
 
 // Exactly one of customerId / walkInName must be present — a queue entry
 // is either a real account's entry or a staff-recorded walk-in, never

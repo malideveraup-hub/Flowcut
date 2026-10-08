@@ -19,3 +19,9 @@
 .tab.active {
   color: var(--customer-amber);
 }
+
+@media (min-width: 901px) {
+  .bar {
+    display: none;
+  }
+}

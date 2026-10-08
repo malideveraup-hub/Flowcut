@@ -13,9 +13,51 @@
   padding: var(--space-4);
 }
 
+.landingMain {
+  max-width: none;
+  padding: 0;
+}
+
+.discoveryMain {
+  max-width: none;
+  padding: 0;
+}
+
+.profileMain {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+.joinMain {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
 @media (min-width: 900px) {
   .main {
     max-width: 720px;
     padding: var(--space-6);
+  }
+
+  .landingMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .discoveryMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .profileMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .joinMain {
+    max-width: none;
+    padding: 0;
   }
 }

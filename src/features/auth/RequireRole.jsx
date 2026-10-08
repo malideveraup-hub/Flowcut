@@ -7,16 +7,8 @@ import { useAuth } from '../../hooks/useAuth';
  * `location.state.from` so Login can send them back afterwards.
  */
 export default function RequireRole({ role, children }) {
-  const { role: currentRole, loading, consentCurrent } = useAuth();
+  const { role: currentRole, loading, consentCurrent, homeFor } = useAuth();
   const location = useLocation();
-
-  console.log('[AUTH] RequireRole', {
-    path: location.pathname,
-    currentRole,
-    loading,
-    consentCurrent,
-    requiredRole: role,
-  });
 
   const allowed = Array.isArray(role) ? role : [role];
 
@@ -24,8 +16,12 @@ export default function RequireRole({ role, children }) {
     return null;
   }
 
-  if (!currentRole || !allowed.includes(currentRole)) {
+  if (!currentRole) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (!allowed.includes(currentRole)) {
+    return <Navigate to={homeFor(currentRole)} replace />;
   }
 
   if (!consentCurrent) {

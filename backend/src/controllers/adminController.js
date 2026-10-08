@@ -1,5 +1,5 @@
 import * as shopService from '../services/shopService.js';
-import { User, QueueEntry } from '../models/index.js';
+import { User, QueueEntry, ServiceLog, Shop } from '../models/index.js';
 
 export async function listAllShops(req, res, next) {
   try {
@@ -36,6 +36,33 @@ export async function rejectShop(req, res, next) {
     // garbage or absurdly large payloads out of AuditLog.metadata.
     const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 500) : undefined;
     const shop = await shopService.rejectShop(req.params.shopId, req.user.id, safeReason);
+    res.json({ success: true, data: { shop } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function generateQueueQr(req, res, next) {
+  try {
+    const shop = await shopService.generateQueueQr(req.params.shopId, req.user.id);
+    res.status(201).json({ success: true, data: { shop } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function regenerateQueueQr(req, res, next) {
+  try {
+    const shop = await shopService.regenerateQueueQr(req.params.shopId, req.user.id);
+    res.json({ success: true, data: { shop } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function setQueueQrStatus(req, res, next) {
+  try {
+    const shop = await shopService.setQueueQrStatus(req.params.shopId, req.body?.status);
     res.json({ success: true, data: { shop } });
   } catch (err) {
     next(err);
@@ -79,6 +106,40 @@ export async function basicAnalytics(req, res, next) {
         activeQueueEntries: activeQueueCount,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function completedServiceAnalytics(req, res, next) {
+  try {
+    const logs = await ServiceLog.find()
+      .populate({ path: 'queueEntryId', select: 'status shopId' })
+      .populate({ path: 'serviceId', select: 'name price shopId' })
+      .sort({ endTime: 1 });
+    const completedLogs = logs.filter((log) =>
+      log.queueEntryId?.status === 'COMPLETED' && log.serviceId
+    );
+    const shopIds = [...new Set(completedLogs.map((log) =>
+      String(log.queueEntryId.shopId || log.serviceId.shopId)
+    ))];
+    const shops = await Shop.find({ _id: { $in: shopIds } }).select('name');
+    const shopNames = new Map(shops.map((shop) => [String(shop._id), shop.name]));
+
+    const services = completedLogs.map((log) => {
+      const shopId = String(log.queueEntryId.shopId || log.serviceId.shopId);
+      return {
+        shopId,
+        shop: shopNames.get(shopId) || 'Unknown shop',
+        service: log.serviceId.name,
+        price: log.serviceId.price,
+        status: 'completed',
+        service_started: log.startTime,
+        service_finished: log.endTime,
+      };
+    });
+
+    res.json({ success: true, data: { services } });
   } catch (err) {
     next(err);
   }

@@ -1,16 +1,18 @@
 .wrap {
-  margin-bottom: var(--space-4);
+  margin: 12px 0 0;
 }
 
 .summaryBox {
-  background: var(--staff-page);
-  border-radius: var(--radius-staff-control);
-  padding: var(--space-3);
-  margin-bottom: var(--space-3);
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
 }
 
 .summaryTitle {
-  font-size: var(--text-caption);
+  color: #ddd8f3;
+  font-size: 12px;
   font-weight: 600;
   margin: 0 0 6px;
 }
@@ -18,29 +20,35 @@
 .summaryList {
   margin: 0;
   padding-left: 18px;
-  font-size: var(--text-caption);
-  color: var(--staff-secondary);
+  font-size: 12px;
+  color: #a9a3c9;
   line-height: 1.5;
 }
 
 .checkboxRow {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: var(--text-body-sm);
-  margin-bottom: 8px;
+  gap: 10px;
+  color: #d6d1ee;
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin-bottom: 9px;
   cursor: pointer;
 }
 
 .checkboxRow input {
-  margin-top: 3px;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: #8b5cf6;
 }
 
 .linkLike {
   background: none;
   border: none;
   padding: 0;
-  color: var(--staff-accent);
+  color: #a78bfa;
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
@@ -48,15 +56,16 @@
 }
 
 .error {
-  font-size: var(--text-caption);
-  color: var(--staff-danger);
+  font-size: 12.5px;
+  color: #fca5a5;
   margin: 4px 0 0;
 }
 
 .modalList {
   margin: 0;
   padding-left: 18px;
-  font-size: var(--text-body-sm);
+  color: #d6d1ee;
+  font-size: 13px;
   line-height: 1.6;
 }
 

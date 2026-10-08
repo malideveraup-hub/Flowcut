@@ -62,5 +62,6 @@ export function toStaffQueueEntry(entry, { customerName, serviceName, barberName
     source: entry.source,
     delayMinutes: entry.delayMinutes || 0,
     createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
   };
 }

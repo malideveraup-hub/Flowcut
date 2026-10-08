@@ -33,6 +33,27 @@ export async function getMyQueue(req, res, next) {
   }
 }
 
+export async function checkInMyQueue(req, res, next) {
+  try {
+    const entry = await queueService.checkInMyQueue(req.user.id);
+    res.json({ success: true, data: { entry } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getMyQueueHistory(req, res, next) {
+  try {
+    const history = await queueService.getMyQueueHistory(req.user.id, {
+      page: req.query.page,
+      pageSize: req.query.limit,
+    });
+    res.json({ success: true, data: history });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function cancelMyQueue(req, res, next) {
   try {
     const entry = await queueService.getMyActiveQueueEntry(req.user.id);
@@ -52,6 +73,51 @@ export async function getShopQueue(req, res, next) {
   try {
     const queue = await queueService.getShopQueue(req.user.shopId);
     res.json({ success: true, data: { queue } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getShopQueueBoard(req, res, next) {
+  try {
+    const board = await queueService.getShopQueueBoard(req.user.shopId, req.query);
+    res.json({ success: true, data: board });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateShopQueueEntry(req, res, next) {
+  try {
+    await queueService.updateShopQueueEntry(req.user.shopId, req.params.entryId, req.body || {});
+    res.json({ success: true, message: 'Queue entry updated.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function completeShopQueueEntry(req, res, next) {
+  try {
+    await queueService.completeShopQueueEntry(req.user.shopId, req.params.entryId);
+    res.json({ success: true, message: 'Service marked completed.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function moveShopQueueEntry(req, res, next) {
+  try {
+    await queueService.moveShopQueueEntry(req.user.shopId, req.params.entryId, req.body?.position);
+    res.json({ success: true, message: 'Queue position updated.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function setShopQueueOpen(req, res, next) {
+  try {
+    const queueOpen = await queueService.setShopQueueOpen(req.user.shopId, req.body?.open);
+    res.json({ success: true, data: { queueOpen } });
   } catch (err) {
     next(err);
   }

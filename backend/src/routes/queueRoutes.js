@@ -7,6 +7,8 @@ const router = Router();
 router.use(requireAuth, requireRole('customer'));
 
 router.get('/my', queueController.getMyQueue);
+router.get('/my/history', queueController.getMyQueueHistory);
+router.post('/my/check-in', queueController.checkInMyQueue);
 router.delete('/my', queueController.cancelMyQueue);
 
 export default router;

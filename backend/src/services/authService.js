@@ -202,12 +202,12 @@ export async function resendEmailOtp({ email }) {
 
 export async function authenticateUser({ email, password }) {
   const emailErr = validateEmail(email);
-  if (emailErr || typeof password !== 'string' || !password) {
-    // Intentionally the same generic message as a wrong password below —
-    // don't tell the caller which part of their input was the problem.
-    throw new AppError(400, 'Please enter your Gmail and password.', {
-      email: emailErr,
-    });
+  const passwordErr = validatePassword(password);
+  if (emailErr || passwordErr) {
+    const errors = {};
+    if (emailErr) errors.email = emailErr;
+    if (passwordErr) errors.password = passwordErr;
+    throw new AppError(400, 'Please enter a valid Gmail and password.', errors);
   }
 
   const normalizedEmail = normalizeEmail(email);
@@ -389,6 +389,7 @@ export async function deleteOwnAccount(userId) {
   const unusableHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), SALT_ROUNDS);
 
   user.name = 'Deleted User';
+  user.favoriteShopIds = [];
   // mobileNumber has a required + unique + PH-format index; a deleted
   // account keeps a syntactically-invalid-but-unique placeholder so the
   // index constraint is satisfied without ever matching a real login

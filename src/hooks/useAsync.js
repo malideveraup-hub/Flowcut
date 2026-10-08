@@ -18,8 +18,8 @@ export function useAsync(loader, deps = []) {
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
-  const run = useCallback(async () => {
-    setLoading(true);
+  const run = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const result = await loaderRef.current();

@@ -12,11 +12,30 @@ const router = Router();
 // registration-time/account-action gate, never a browsing gate — a guest
 // never sees it just for looking at shops/queues.
 router.get('/', shopController.listPublicShops);
+router.get('/queue-qr/:token', shopController.getPublicShopByQueueQr);
 
 router.get(
   '/my-application',
   requireAuth,
   shopController.getMyShopApplication
+);
+
+router.get('/favorites', requireAuth, requireRole('customer'), shopController.getMyFavoriteShops);
+router.put(
+  '/favorites/:shopId',
+  validateObjectIdParam('shopId'),
+  requireAuth,
+  requireRole('customer'),
+  requireCurrentConsent,
+  shopController.addMyFavoriteShop
+);
+router.delete(
+  '/favorites/:shopId',
+  validateObjectIdParam('shopId'),
+  requireAuth,
+  requireRole('customer'),
+  requireCurrentConsent,
+  shopController.removeMyFavoriteShop
 );
 
 router.get(

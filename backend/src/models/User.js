@@ -75,6 +75,10 @@ const userSchema = new mongoose.Schema(
       ref: 'Shop',
       default: null,
     },
+    favoriteShopIds: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Shop',
+    }],
 
     // ---- Consent record (Section 12) ----
     // Recorded at the moment of registration (or, for accounts created by

@@ -31,9 +31,9 @@ export async function register(req, res, next) {
 
 export async function login(req, res, next) {
   try {
-    const { email, password } = req.body || {};
+    const { email, password, rememberMe } = req.body || {};
     const { user, token } = await authService.authenticateUser({ email, password });
-    setAuthCookie(res, token);
+    setAuthCookie(res, token, rememberMe !== false);
     res.json({ success: true, data: { user } });
   } catch (err) {
     next(err);

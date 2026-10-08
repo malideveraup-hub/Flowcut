@@ -35,6 +35,144 @@
   font-weight: 600;
 }
 
+.superAdmin {
+  position: sticky;
+  top: 0;
+  display: flex;
+  width: 248px;
+  height: 100vh;
+  flex-direction: column;
+  padding: 23px 15px 16px;
+  border: 0;
+  background: #211b3c;
+  color: #d5d0e9;
+}
+
+.superAdmin .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 8px 6px;
+  color: #fff;
+  font-size: 19px;
+}
+
+.logoMark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: #fff;
+  color: #7052e8;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.role {
+  align-self: flex-start;
+  margin: 9px 8px 19px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #30284f;
+  color: #c9bdff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navLabel {
+  padding: 14px 11px 6px;
+  color: #8f8aae;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.superAdmin .item {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+  padding: 0 11px;
+  border-radius: 7px;
+  color: #c1bdd5;
+  font-size: 12px;
+}
+
+.superAdmin .item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.superAdmin .item.active {
+  background: #7052e8;
+  color: #fff;
+  box-shadow: 0 7px 16px -8px rgba(112, 82, 232, 0.9);
+}
+
+.superAdmin .item svg,
+.logout svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.account {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+  padding: 14px 7px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.accountText strong,
+.accountText span {
+  display: block;
+}
+
+.accountText strong {
+  overflow-wrap: anywhere;
+  color: #fff;
+  font-size: 12px;
+}
+
+.accountText span {
+  margin-top: 3px;
+  color: #a7a1be;
+  font-size: 10px;
+}
+
+.logout {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  color: #c1bdd5;
+  font-size: 11px;
+  text-align: left;
+}
+
+.logout:hover {
+  color: #fff;
+}
+
 @media (max-width: 1024px) {
   .sidebar {
     width: 100%;
@@ -49,4 +187,40 @@
   .logo, .subtitle { display: none; }
   .item { margin-bottom: 0; white-space: nowrap; }
   .sidebar nav { display: flex; gap: 4px; }
+
+  .superAdmin {
+    width: 248px;
+    flex: 0 0 248px;
+    align-items: stretch;
+    gap: 0;
+    overflow: visible;
+    border: 0;
+    padding: 23px 15px 16px;
+  }
+
+  .superAdmin .logo { display: flex; }
+  .superAdmin .role { display: block; }
+  .superAdmin .nav { display: flex; flex-direction: column; gap: 4px; }
+  .superAdmin .item { white-space: normal; }
+}
+
+@media (max-width: 860px) {
+  .superAdmin {
+    position: fixed;
+    z-index: 51;
+    left: 0;
+    width: min(280px, calc(100vw - 48px));
+    flex: none;
+    transform: translateX(-105%);
+    transition: transform 220ms ease;
+    box-shadow: 18px 0 38px rgba(22, 17, 45, 0.24);
+  }
+
+  .superAdmin.open {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .superAdmin { transition: none; }
 }

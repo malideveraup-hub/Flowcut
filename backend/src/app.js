@@ -11,6 +11,7 @@ import queueRoutes from './routes/queueRoutes.js';
 import shopAdminRoutes from './routes/shopAdminRoutes.js';
 import barberRoutes from './routes/barberRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 export function createApp() {
   const app = express();
@@ -53,6 +54,7 @@ export function createApp() {
   app.use('/api/shop-admin', shopAdminRoutes);
   app.use('/api/barber', barberRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/notifications', notificationRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

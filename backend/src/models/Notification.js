@@ -3,9 +3,12 @@ import mongoose from 'mongoose';
 export const NOTIFICATION_TYPES = [
   'QUEUE_JOINED',
   'QUEUE_POSITION_CHANGED',
+  'ARRIVE_SOON',
   'WAIT_ESTIMATE_CHANGED',
   'NEAR_TURN',
   'YOU_ARE_NEXT',
+  'QUEUE_LEFT',
+  'QUEUE_REMOVED',
   'SERVICE_STARTED',
   'QUEUE_CANCELLED',
   'SHOP_STATUS_CHANGED',
@@ -28,6 +31,28 @@ const notificationSchema = new mongoose.Schema(
     shopId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Shop',
+      default: null,
+    },
+    queueEntryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'QueueEntry',
+      default: null,
+    },
+    eventKey: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    previousPosition: {
+      type: Number,
+      default: null,
+    },
+    position: {
+      type: Number,
+      default: null,
+    },
+    arrivalDeadlineAt: {
+      type: Date,
       default: null,
     },
     type: {
@@ -63,5 +88,9 @@ const notificationSchema = new mongoose.Schema(
 // Powers the notification bell's unread count / list.
 notificationSchema.index({ userId: 1, read: 1 });
 notificationSchema.index({ userId: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, eventKey: 1 }, {
+  unique: true,
+  partialFilterExpression: { eventKey: { $type: 'string' } },
+});
 
 export default mongoose.model('Notification', notificationSchema, 'notifications');

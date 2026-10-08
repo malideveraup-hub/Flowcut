@@ -13,15 +13,14 @@ function cookieOptions() {
   };
 }
 
-export function setAuthCookie(res, token) {
-  res.cookie(AUTH_COOKIE_NAME, token, {
-    ...cookieOptions(),
-    // Browser-side lifetime. The JWT itself independently expires per
-    // JWT_EXPIRES_IN (checked on every request by verifyToken) — this is
-    // just how long the browser bothers holding onto the cookie at all,
-    // so it's fine for it to be a same-or-longer, round number.
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  });
+export function setAuthCookie(res, token, rememberMe = true) {
+  const options = cookieOptions();
+  if (rememberMe) {
+    // Browser lifetime is separate from JWT expiry. Session cookies are
+    // used when Remember Me is unchecked; persistent cookies last 7 days.
+    options.maxAge = 7 * 24 * 60 * 60 * 1000;
+  }
+  res.cookie(AUTH_COOKIE_NAME, token, options);
 }
 
 export function clearAuthCookie(res) {

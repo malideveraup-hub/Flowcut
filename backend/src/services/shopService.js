@@ -1,4 +1,5 @@
-import { Shop, User, AuditLog, Barber } from '../models/index.js';
+import { randomBytes } from 'node:crypto';
+import { Shop, User, AuditLog, Barber, Service } from '../models/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { toPublicShop } from '../utils/publicSerializers.js';
 import { computeLiveWaitEstimate } from '../utils/waitEstimate.js';
@@ -88,6 +89,59 @@ export async function getPublicShopById(shopId) {
   return { ...toPublicShop(shop), waitMin: wait.min, waitMax: wait.max, waiting: wait.waitingCount, activeBarbers };
 }
 
+export async function getMyFavoriteShops(userId) {
+  const user = await User.findById(userId).select('favoriteShopIds');
+  if (!user) throw new AppError(404, 'Account not found.');
+  const favoriteIds = user.favoriteShopIds || [];
+  if (favoriteIds.length === 0) return [];
+
+  const shops = await Shop.find({ _id: { $in: favoriteIds }, status: 'APPROVED' });
+  const shopIds = shops.map((shop) => shop._id);
+  const [services, barbers] = await Promise.all([
+    Service.find({ shopId: { $in: shopIds }, status: 'ACTIVE' }).sort({ name: 1 }).select('shopId name'),
+    Barber.find({ shopId: { $in: shopIds }, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'BUSY'] } }).select('shopId'),
+  ]);
+  const serviceByShop = new Map();
+  for (const service of services) {
+    const key = String(service.shopId);
+    if (!serviceByShop.has(key)) serviceByShop.set(key, service.name);
+  }
+  const barberCounts = new Map();
+  for (const barber of barbers) {
+    const key = String(barber.shopId);
+    barberCounts.set(key, (barberCounts.get(key) || 0) + 1);
+  }
+  const shopsById = new Map(shops.map((shop) => [String(shop._id), shop]));
+
+  const favorites = await Promise.all(favoriteIds.map(async (favoriteId) => {
+    const shop = shopsById.get(String(favoriteId));
+    if (!shop) return null;
+    const wait = await computeLiveWaitEstimate(shop._id);
+    return {
+      ...toPublicShop(shop),
+      serviceName: serviceByShop.get(String(shop._id)) || null,
+      waitMinutes: wait.waitingCount === 0 ? 0 : wait.min,
+      waitingCount: wait.waitingCount,
+      activeBarbers: barberCounts.get(String(shop._id)) || 0,
+      rating: null,
+      distanceMiles: null,
+    };
+  }));
+  return favorites.filter(Boolean);
+}
+
+export async function addFavoriteShop(userId, shopId) {
+  const shop = await Shop.findOne({ _id: shopId, status: 'APPROVED' }).select('_id');
+  if (!shop) throw new AppError(404, 'Shop not found.');
+  const user = await User.findByIdAndUpdate(userId, { $addToSet: { favoriteShopIds: shop._id } }, { new: true }).select('_id');
+  if (!user) throw new AppError(404, 'Account not found.');
+}
+
+export async function removeFavoriteShop(userId, shopId) {
+  const user = await User.findByIdAndUpdate(userId, { $pull: { favoriteShopIds: shopId } }, { new: true }).select('_id');
+  if (!user) throw new AppError(404, 'Account not found.');
+}
+
 /**
  * The authenticated Shop Admin's own shop — shopId comes from
  * req.user.shopId (see controller), never a client-supplied id.
@@ -152,6 +206,76 @@ export async function getShopForAdmin(shopId) {
   const shop = await Shop.findById(shopId);
   if (!shop) throw new AppError(404, 'Shop not found.');
   return shop;
+}
+
+function createQueueQrToken() {
+  return `fq_${randomBytes(24).toString('base64url')}`;
+}
+
+function createQueueQrId() {
+  return `FC-QR-${randomBytes(3).toString('hex').toUpperCase()}`;
+}
+
+async function requireApprovedShopForQr(shopId) {
+  const shop = await Shop.findById(shopId);
+  if (!shop) throw new AppError(404, 'Shop not found.');
+  if (shop.status !== 'APPROVED') throw new AppError(409, 'Queue QR codes are available only for approved shops.');
+  return shop;
+}
+
+export async function generateQueueQr(shopId, assignedBy) {
+  const shop = await requireApprovedShopForQr(shopId);
+  if (shop.queueQr?.token) throw new AppError(409, 'This shop already has a queue QR code.');
+  shop.queueQr = { token: createQueueQrToken(), codeId: createQueueQrId(), status: 'active', assignedBy, createdAt: new Date() };
+  await shop.save();
+  return shop;
+}
+
+export async function regenerateQueueQr(shopId, assignedBy) {
+  const shop = await requireApprovedShopForQr(shopId);
+  shop.queueQr = { token: createQueueQrToken(), codeId: createQueueQrId(), status: 'active', assignedBy, createdAt: new Date() };
+  await shop.save();
+  return shop;
+}
+
+export async function setQueueQrStatus(shopId, status) {
+  const shop = await requireApprovedShopForQr(shopId);
+  if (!shop.queueQr?.token) throw new AppError(404, 'Generate a queue QR code before changing its status.');
+  if (!['active', 'disabled'].includes(status)) throw new AppError(400, 'QR status must be active or disabled.');
+  shop.queueQr.status = status;
+  await shop.save();
+  return shop;
+}
+
+export async function getShopByActiveQueueQr(token) {
+  if (typeof token !== 'string' || !/^fq_[A-Za-z0-9_-]{32}$/.test(token)) return null;
+  const shop = await Shop.findOne({
+    status: 'APPROVED',
+    'queueQr.token': token,
+    'queueQr.status': 'active',
+  }).select('_id name address status');
+  if (!shop) return null;
+  return { id: shop._id.toString(), name: shop.name, address: shop.address };
+}
+
+export async function getOwnShopQueueQr(shopId) {
+  const shop = await Shop.findById(shopId).populate('queueQr.assignedBy', 'name');
+  if (!shop) throw new AppError(404, 'Shop not found.');
+
+  const qr = shop.queueQr?.token
+    ? {
+        id: shop.queueQr.codeId || `FC-QR-${shop.queueQr.token.slice(-6).toUpperCase()}`,
+        payload: `/join-queue?shop=${encodeURIComponent(shop.queueQr.token)}`,
+        status: shop.queueQr.status,
+        assignedBy: shop.queueQr.assignedBy?.name || 'Super Admin',
+        assignedAt: shop.queueQr.createdAt,
+      }
+    : null;
+
+  return {
+    shop: { id: shop._id.toString(), name: shop.name, address: shop.address },
+    qr,
+  };
 }
 
 /**

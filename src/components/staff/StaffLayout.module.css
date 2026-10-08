@@ -3,11 +3,33 @@
   min-height: 100%;
 }
 
+.superAdmin {
+  min-height: 100vh;
+  background: #f5f4f9;
+}
+
+.shell.superAdmin {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: row;
+  box-sizing: border-box;
+}
+
 .body {
   flex: 1;
   min-width: 0;
+  width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.bodyDashboard {
+  min-width: 0;
+}
+
+.bodyQueue {
+  min-width: 0;
 }
 
 .topbar {
@@ -17,6 +39,61 @@
   padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--staff-line);
   background: #fff;
+}
+
+.superAdminTopbar {
+  display: none;
+}
+
+.mobilebar {
+  display: none;
+}
+
+.mobileLogo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #201c36;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.mobileLogo b {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border-radius: 7px;
+  background: #7052e8;
+  color: #fff;
+}
+
+.menuButton {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid #e8e6ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #201c36;
+}
+
+.menuButton svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.mobileOverlay {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 11, 32, 0.55);
 }
 
 .who {
@@ -42,12 +119,65 @@
   padding: var(--space-5);
   max-width: 1100px;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.mainSuperAdmin {
+  width: 100%;
+  max-width: 1480px;
+  margin-inline: auto;
+  padding: 28px 24px 40px;
+  box-sizing: border-box;
+}
+
+.mainDashboard {
+  max-width: 1480px;
+  margin-inline: auto;
+}
+
+.mainQueue {
+  max-width: 1600px;
+  margin-inline: auto;
 }
 
 @media (max-width: 1024px) {
   .shell { flex-direction: column; }
+  .shell.superAdmin { flex-direction: row; }
+  .bodyDashboard { width: 100%; }
+  .bodyQueue { width: 100%; }
+}
+
+@media (max-width: 860px) {
+  .superAdmin {
+    display: block;
+  }
+
+  .shell.superAdmin { display: block; }
+  .superAdmin .body { width: 100%; }
+
+  .superAdmin .mobilebar {
+    position: sticky;
+    z-index: 40;
+    top: 0;
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-bottom: 1px solid #e8e6ef;
+    background: rgba(255, 255, 255, 0.96);
+  }
+
+  .mainSuperAdmin {
+    max-width: 100%;
+    margin-inline: 0;
+    padding: 20px 16px 32px;
+  }
 }
 
 @media (max-width: 640px) {
   .main { padding: var(--space-4); }
+  .mainDashboard { padding: 0; }
+  .mainQueue { padding: var(--space-4); }
 }

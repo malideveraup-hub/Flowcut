@@ -49,6 +49,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function validateEmail(email) {
   const trimmed = (email || '').trim();
   if (!trimmed) return 'Enter a valid email address.';
+  if (trimmed.length > 254) return 'Email is too long.';
   if (!EMAIL_RE.test(trimmed)) return 'Enter a valid email address.';
   if (!trimmed.toLowerCase().endsWith('@gmail.com')) return 'Use a Gmail address ending in @gmail.com.';
   return null;
@@ -60,11 +61,14 @@ export function normalizeEmail(email) {
 
 export function validatePassword(password) {
   if (!password) return 'Password is required.';
+  if (/\s/.test(password)) return 'Password cannot contain spaces.';
   if (password.length < 8) return 'Use at least 8 characters.';
+  if (password.length > 128) return 'Password is too long.';
   return null;
 }
 
 export function validateConfirmPassword(password, confirm) {
+  if (!confirm) return 'Confirm your password.';
   if (confirm !== password) return "Passwords don't match.";
   return null;
 }

@@ -11,8 +11,12 @@ router.get('/shops', adminController.listAllShops);
 router.get('/shops/:shopId', validateObjectIdParam('shopId'), adminController.getShop);
 router.patch('/shops/:shopId/approve', validateObjectIdParam('shopId'), adminController.approveShop);
 router.patch('/shops/:shopId/reject', validateObjectIdParam('shopId'), adminController.rejectShop);
+router.post('/shops/:shopId/queue-qr', validateObjectIdParam('shopId'), adminController.generateQueueQr);
+router.post('/shops/:shopId/queue-qr/regenerate', validateObjectIdParam('shopId'), adminController.regenerateQueueQr);
+router.patch('/shops/:shopId/queue-qr', validateObjectIdParam('shopId'), adminController.setQueueQrStatus);
 
 router.get('/users', adminController.listUsers);
 router.get('/analytics/basic', adminController.basicAnalytics);
+router.get('/analytics/completed-services', adminController.completedServiceAnalytics);
 
 export default router;

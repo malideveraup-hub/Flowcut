@@ -51,13 +51,29 @@ async function upsertUserIfAbsent({ label, name, lastName, email, mobileNumber, 
   const normalizedMobile = normalizeMobileNumber(mobileNumber);
   const existing = await User.findOne({ mobileNumber: normalizedMobile });
   if (existing) {
+    let changed = false;
     if (email && (!existing.email || existing.email !== normalizeEmail(email))) {
       existing.email = normalizeEmail(email);
       existing.emailVerified = true;
-      await existing.save({ validateBeforeSave: false });
-      console.log(`[seed] Updated ${label} with verified Gmail login.`);
+      changed = true;
     }
-    console.log(`[seed] ${label} already exists (${normalizedMobile}) — not modified.`);
+    if (role === 'customer' && existing.email === normalizeEmail(email)) {
+      if (existing.role !== 'customer' || existing.shopId) {
+        existing.role = 'customer';
+        existing.shopId = null;
+        changed = true;
+      }
+      if (!existing.lastName && lastName) {
+        existing.lastName = lastName;
+        changed = true;
+      }
+    }
+    if (changed) {
+      await existing.save({ validateBeforeSave: false });
+      console.log(`[seed] Updated ${label} account details (role: ${existing.role}).`);
+    } else {
+      console.log(`[seed] ${label} already exists (${normalizedMobile}) — not modified.`);
+    }
     return existing;
   }
 

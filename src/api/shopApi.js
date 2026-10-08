@@ -10,6 +10,10 @@ export function fetchPublicShop(shopId) {
   return apiRequest(`/api/shops/${shopId}`).then((d) => d.shop);
 }
 
+export function fetchPublicShopByQueueQr(token) {
+  return apiRequest(`/api/shops/queue-qr/${encodeURIComponent(token)}`).then((d) => d.shop);
+}
+
 export function fetchPublicServices(shopId) {
   return apiRequest(`/api/shops/${shopId}/services`).then((d) => d.services);
 }
@@ -37,6 +41,39 @@ export function fetchMyQueue() {
   return apiRequest('/api/queue/my').then((d) => d.entry);
 }
 
+export function checkInMyQueue() {
+  return apiRequest('/api/queue/my/check-in', { method: 'POST' }).then((d) => d.entry);
+}
+
+export function fetchMyQueueHistory(page = 1, limit = 5) {
+  const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+  return apiRequest(`/api/queue/my/history?${query}`);
+}
+
 export function cancelMyQueue() {
   return apiRequest('/api/queue/my', { method: 'DELETE' });
+}
+
+export function fetchMyFavorites() {
+  return apiRequest('/api/shops/favorites').then((d) => d.shops);
+}
+
+export function addMyFavorite(shopId) {
+  return apiRequest(`/api/shops/favorites/${shopId}`, { method: 'PUT' });
+}
+
+export function removeMyFavorite(shopId) {
+  return apiRequest(`/api/shops/favorites/${shopId}`, { method: 'DELETE' });
+}
+
+export function fetchMyNotifications(limit = 30) {
+  return apiRequest(`/api/notifications?limit=${encodeURIComponent(limit)}`);
+}
+
+export function markMyNotificationRead(notificationId) {
+  return apiRequest(`/api/notifications/${notificationId}/read`, { method: 'PATCH' });
+}
+
+export function markAllMyNotificationsRead() {
+  return apiRequest('/api/notifications/read-all', { method: 'PATCH' });
 }

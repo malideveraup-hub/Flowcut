@@ -15,6 +15,8 @@ const router = Router();
 router.use(requireAuth, requireRole('shop_admin'));
 
 router.get('/shop', shopController.getOwnShop);
+router.get('/dashboard-summary', shopController.getOwnShopDashboardSummary);
+router.get('/qr', shopController.getOwnShopQueueQr);
 router.patch('/shop', shopController.updateOwnShop);
 
 router.get('/services', serviceController.listOwnServices);
@@ -26,8 +28,13 @@ router.get('/barbers', barberController.listShopBarbers);
 router.post('/barbers', barberController.createBarber);
 router.patch('/barbers/:barberId', validateObjectIdParam('barberId'), barberController.updateBarberStatus);
 
+router.get('/queue/board', queueController.getShopQueueBoard);
 router.get('/queue', queueController.getShopQueue);
+router.patch('/queue/status', queueController.setShopQueueOpen);
 router.post('/queue', queueController.addWalkIn);
+router.patch('/queue/:entryId', validateObjectIdParam('entryId'), queueController.updateShopQueueEntry);
+router.patch('/queue/:entryId/complete', validateObjectIdParam('entryId'), queueController.completeShopQueueEntry);
+router.patch('/queue/:entryId/move', validateObjectIdParam('entryId'), queueController.moveShopQueueEntry);
 router.patch('/queue/:entryId/skip', validateObjectIdParam('entryId'), queueController.skipEntry);
 router.patch('/queue/:entryId/cancel', validateObjectIdParam('entryId'), queueController.cancelEntryByStaff);
 

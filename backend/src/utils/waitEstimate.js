@@ -1,4 +1,4 @@
-import { Barber } from '../models/index.js';
+import { Barber, ServiceLog } from '../models/index.js';
 import QueueEntry from '../models/QueueEntry.js';
 import Service from '../models/Service.js';
 
@@ -42,4 +42,42 @@ export async function computeLiveWaitEstimate(shopId) {
   const max = Math.max(min + 5, Math.round(min * 1.3));
 
   return { min, max, waitingCount: waitingEntries.length };
+}
+
+export async function computeCustomerWaitEstimate(shopId, entry, now = new Date()) {
+  if (entry.status === 'CALLED') return { min: 0, max: 0 };
+
+  const [entriesAhead, activeServices, activeBarberCount] = await Promise.all([
+    QueueEntry.find({
+      shopId,
+      status: { $in: ['JOINED', 'WAITING', 'CALLED'] },
+      queuePosition: { $lt: entry.queuePosition },
+    }).select('serviceId'),
+    QueueEntry.find({ shopId, status: { $in: ['IN_SERVICE', 'DELAYED', 'PAUSED'] } }).select('serviceId delayMinutes'),
+    Barber.countDocuments({ shopId, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'BUSY'] } }),
+  ]);
+
+  const entries = [...entriesAhead, ...activeServices];
+  const serviceIds = [...new Set(entries.map((item) => String(item.serviceId)))];
+  const [services, serviceLogs] = await Promise.all([
+    Service.find({ _id: { $in: serviceIds } }).select('_id estimatedDuration'),
+    ServiceLog.find({ queueEntryId: { $in: activeServices.map((item) => item._id) } }).select('queueEntryId startTime'),
+  ]);
+  const durationById = new Map(services.map((service) => [String(service._id), service.estimatedDuration]));
+  const startByEntry = new Map(serviceLogs.map((log) => [String(log.queueEntryId), log.startTime]));
+  const fallbackDuration = services.length
+    ? services.reduce((total, service) => total + service.estimatedDuration, 0) / services.length
+    : 25;
+  const activeIds = new Set(activeServices.map((item) => String(item._id)));
+  const totalMinutes = entries.reduce((total, item) => {
+    const duration = durationById.get(String(item.serviceId)) ?? fallbackDuration;
+    if (!activeIds.has(String(item._id))) return total + duration;
+    const startedAt = startByEntry.get(String(item._id));
+    const elapsed = startedAt ? Math.max(0, (now - startedAt) / 60000) : 0;
+    return total + Math.max(0, duration - elapsed + (item.delayMinutes || 0));
+  }, 0);
+
+  const barbers = Math.max(activeBarberCount, 1);
+  const min = Math.max(5, Math.round(totalMinutes / barbers));
+  return { min, max: Math.max(min + 5, Math.round(min * 1.3)) };
 }

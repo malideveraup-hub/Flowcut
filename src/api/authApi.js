@@ -66,8 +66,8 @@ export function registerRequest({ name, lastName, email, password, termsAccepted
   });
 }
 
-export function loginRequest({ email, password }) {
-  return request('/api/auth/login', { method: 'POST', body: { email, password } });
+export function loginRequest({ email, password, rememberMe = true }) {
+  return request('/api/auth/login', { method: 'POST', body: { email, password, rememberMe } });
 }
 
 export function verifyEmailRequest({ email, otp }) {

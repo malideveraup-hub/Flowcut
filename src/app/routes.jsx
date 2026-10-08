@@ -16,6 +16,7 @@ import Discovery from '../features/customer/Discovery';
 import ShopDetails from '../features/customer/ShopDetails';
 import PublicQueueView from '../features/customer/PublicQueueView';
 import JoinQueue from '../features/customer/JoinQueue';
+import JoinQueueQr from '../features/customer/JoinQueueQr';
 import JoinRedirect from '../features/customer/JoinRedirect';
 import ScanToJoin from '../features/customer/ScanToJoin';
 import MyQueue from '../features/customer/MyQueue';
@@ -41,6 +42,7 @@ import ShopApproval from '../features/super-admin/ShopApproval';
 import UserManagement from '../features/super-admin/UserManagement';
 import PlatformAnalytics from '../features/super-admin/PlatformAnalytics';
 import PlatformSettings from '../features/super-admin/PlatformSettings';
+import SuperAdminQRCodeManagement from '../features/super-admin/SuperAdminQRCodeManagement';
 
 const SHOP_ADMIN_NAV = [
   { to: '/admin', label: 'Dashboard', end: true },
@@ -59,6 +61,7 @@ const SUPER_ADMIN_NAV = [
   { to: '/super-admin/users', label: 'Users' },
   { to: '/super-admin/analytics', label: 'Analytics' },
   { to: '/super-admin/settings', label: 'Settings' },
+  { to: '/super-admin/qr', label: 'QR Code Management', section: 'ACCESS CONTROLS' },
 ];
 
 export const router = createBrowserRouter([
@@ -73,6 +76,7 @@ export const router = createBrowserRouter([
   // QR entry point: flowcut.app/join/{shopId}. Public — it only ever
   // validates the shop and hands off into the public join flow below.
   { path: '/join/:shopId', element: <JoinRedirect /> },
+  { path: '/join-queue', element: <JoinQueueQr /> },
 
   {
     // PUBLIC customer surface — no RequireRole here on purpose (Section 2:
@@ -140,7 +144,7 @@ export const router = createBrowserRouter([
     path: '/admin',
     element: (
       <RequireRole role="shop_admin">
-        <StaffLayout navItems={SHOP_ADMIN_NAV} subtitle="Fade District" />
+        <StaffLayout navItems={SHOP_ADMIN_NAV} subtitle="Fade District" superAdmin roleLabel="SHOP ADMIN" />
       </RequireRole>
     ),
     children: [
@@ -158,12 +162,13 @@ export const router = createBrowserRouter([
     path: '/super-admin',
     element: (
       <RequireRole role="super_admin">
-        <StaffLayout navItems={SUPER_ADMIN_NAV} subtitle="Platform" />
+        <StaffLayout navItems={SUPER_ADMIN_NAV} subtitle="Platform" superAdmin roleLabel="SUPER ADMIN" />
       </RequireRole>
     ),
     children: [
       { index: true, element: <SuperAdminDashboard /> },
       { path: 'shops', element: <ShopManagement /> },
+      { path: 'qr', element: <SuperAdminQRCodeManagement /> },
       { path: 'approvals', element: <ShopApproval /> },
       { path: 'users', element: <UserManagement /> },
       { path: 'analytics', element: <PlatformAnalytics /> },
