@@ -20,11 +20,11 @@ export function createApp() {
   app.use(helmet());
   app.use(
     cors({
-      // A single explicit origin, not a wildcard — required for
-      // cookie-based auth (`credentials: true` + `origin: '*'` is
-      // rejected by browsers anyway, but being explicit here is also
-      // just the correct security posture: Section 20/17).
-      origin: env.corsOrigin,
+      // Use an exact allowlist so credentialed requests never need a wildcard.
+      origin: (requestOrigin, callback) => {
+        const allowedOrigin = env.corsOrigins.includes(requestOrigin) ? requestOrigin : false;
+        callback(null, allowedOrigin);
+      },
       credentials: true,
     })
   );

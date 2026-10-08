@@ -19,7 +19,19 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationRef = useRef(null);
   const navigate = useNavigate();
-  const { notifications, unreadCount, loading, refresh, markRead, markAllRead } = notificationState;
+  const {
+    notifications,
+    unreadCount,
+    loading,
+    refresh,
+    markRead,
+    markAllRead,
+    browserAlertPermission,
+    browserAlertSoundEnabled,
+    browserAlertBusy,
+    browserAlertError,
+    enableBrowserAlerts,
+  } = notificationState;
 
   useEffect(() => {
     function closeOnOutsidePointer(event) {
@@ -115,6 +127,44 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
                     Mark all as read
                   </button>
                 </header>
+                <div className={styles.browserAlertSettings}>
+                  {browserAlertPermission === 'granted' && browserAlertSoundEnabled && !browserAlertError ? (
+                    <p className={styles.browserAlertStatus}>Browser alerts and sound are enabled for 10- and 5-minute reminders.</p>
+                  ) : (
+                    <>
+                      {browserAlertPermission === 'denied' ? (
+                        <p className={styles.browserAlertStatus}>Allow notifications for FlowCut in Chrome site settings. Page sound works while FlowCut is open.</p>
+                      ) : browserAlertPermission === 'unsupported' ? (
+                        <p className={styles.browserAlertStatus}>System notifications are unavailable here. Page sound works while FlowCut is open.</p>
+                      ) : browserAlertPermission === 'granted' ? (
+                        <p className={styles.browserAlertStatus}>
+                          {browserAlertError
+                            ? 'Chrome alerts could not be prepared. Page sound works while FlowCut is open.'
+                            : 'Browser notifications are allowed. Enable page sound for 10- and 5-minute reminders.'}
+                        </p>
+                      ) : (
+                        <p className={styles.browserAlertStatus}>Get a sound and browser alert when your turn is about 10 or 5 minutes away.</p>
+                      )}
+                      <button
+                        type="button"
+                        className={styles.enableBrowserAlertsButton}
+                        onClick={() => void enableBrowserAlerts()}
+                        disabled={browserAlertBusy}
+                      >
+                        {browserAlertBusy
+                          ? 'Enabling alerts…'
+                          : browserAlertPermission === 'denied' || browserAlertPermission === 'unsupported'
+                            ? 'Enable page sound'
+                            : browserAlertError
+                              ? 'Retry browser alerts'
+                              : 'Enable browser alerts and sound'}
+                      </button>
+                    </>
+                  )}
+                  {browserAlertPermission === 'granted' && browserAlertError && (
+                    <p className={styles.browserAlertError}>{browserAlertError}</p>
+                  )}
+                </div>
                 {loading && notifications.length === 0 ? (
                   <p className={styles.notificationEmpty}>Loading updates…</p>
                 ) : notifications.length === 0 ? (

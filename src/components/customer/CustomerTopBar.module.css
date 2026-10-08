@@ -170,6 +170,42 @@
   cursor: default;
 }
 
+.browserAlertSettings {
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(139, 92, 246, .06);
+}
+
+.browserAlertStatus,
+.browserAlertError {
+  margin: 0;
+  color: #b8b4c9;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.browserAlertError {
+  margin-top: 5px;
+  color: #fda4af;
+}
+
+.enableBrowserAlertsButton {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(167, 139, 250, .45);
+  border-radius: 8px;
+  background: rgba(139, 92, 246, .13);
+  color: #d8ccff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.enableBrowserAlertsButton:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
 .notificationList {
   max-height: min(360px, 55vh);
   overflow-y: auto;
