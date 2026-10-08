@@ -1,7 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { Outlet } from 'react-router-dom';
 import CustomerTopBar from '../../components/customer/CustomerTopBar';
-import BottomTabBar from '../../components/customer/BottomTabBar';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotifications } from '../../hooks/useNotifications';
 import styles from './CustomerLayout.module.css';
@@ -24,7 +23,6 @@ export default function CustomerLayout() {
       ].filter(Boolean).join(' ')}>
         <Outlet context={{ notificationState }} />
       </main>
-      <BottomTabBar />
     </div>
   );
 }
