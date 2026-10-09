@@ -29,6 +29,12 @@
   padding: 0;
 }
 
+.shopDetailsMain {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
 .joinMain {
   width: 100%;
   max-width: none;
@@ -52,6 +58,11 @@
   }
 
   .profileMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .shopDetailsMain {
     max-width: none;
     padding: 0;
   }
