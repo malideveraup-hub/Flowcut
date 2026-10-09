@@ -413,7 +413,7 @@ export default function RegisterShop() {
           <div className={styles.gridTwo}>
             <Field label="Owner’s full name" name="owner" value={fields.owner} onChange={(event) => updateField('owner', event.target.value)} error={errors.owner} maxLength={100} placeholder="Enter the owner’s name" required autoComplete="name" />
             <Field label="Shop name" name="shop" value={fields.shop} onChange={(event) => updateField('shop', event.target.value)} error={errors.shop} maxLength={100} placeholder="Your shop name" required icon="shop" autoComplete="organization" />
-            <Field label="Contact number" name="phone" type="tel" value={fields.phone} onChange={(event) => updateField('phone', event.target.value)} error={errors.phone} maxLength={20} placeholder="e.g. 0917 123 4567" required icon="phone" autoComplete="tel" />
+            <Field label="Contact number" name="phone" type="tel" value={fields.phone} onChange={(event) => updateField('phone', event.target.value.replace(/[^0-9+()\-\s]/g, ''))} error={errors.phone} maxLength={20} placeholder="e.g. 0917 123 4567" required icon="phone" autoComplete="tel" />
             <Field label="Contact email" name="email" type="email" value={fields.email} onChange={(event) => updateField('email', event.target.value)} error={errors.email} maxLength={254} placeholder="shop@example.com" required icon="mail" autoComplete="email" />
           </div>
         </section>
