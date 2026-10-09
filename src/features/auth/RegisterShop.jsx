@@ -10,7 +10,7 @@ import {
 } from '../../validation/shopValidation';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
-import styles from './Auth.module.css';
+import styles from './RegisterShop.module.css';
 
 const EMPTY = {
   name: '',
@@ -20,11 +20,86 @@ const EMPTY = {
   closingTime: '',
 };
 
-/**
- * A shop application's ownerId always comes from the authenticated
- * session on the backend (never a field in this form) — so applying
- * requires being logged in first.
- */
+function FieldIcon({ name }) {
+  const paths = {
+    shop: <><path d="M3 10h18l-1.5-6h-15L3 10Z" /><path d="M5 10v10h14V10M9 20v-6h6v6" /></>,
+    address: <><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></>,
+    phone: <path d="M5 3h4l2 5-3 2a15 15 0 0 0 6 6l2-3 5 2v4c0 1.1-.9 2-2 2C10 21 3 14 3 5c0-1.1.9-2 2-2Z" />,
+    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+  };
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths[name]}
+    </svg>
+  );
+}
+
+function RequiredLabel({ children }) {
+  return <>{children} <span className={styles.requiredMark} aria-hidden="true">*</span></>;
+}
+
+function StepList({ completed = false }) {
+  return (
+    <section className={styles.progressCard} aria-labelledby="application-progress-title">
+      <h2 id="application-progress-title">Your application</h2>
+      <ol className={styles.steps} aria-label="Application progress">
+        <li className={completed ? styles.completeStep : styles.currentStep} aria-current={completed ? undefined : 'step'}>
+          <span className={styles.stepNumber}>{completed ? '✓' : '1'}</span>
+          <span className={styles.stepCopy}><strong>Shop details</strong><small>{completed ? 'Submitted' : 'Current step'}</small></span>
+        </li>
+        <li className={styles.unavailableStep} aria-disabled="true">
+          <span className={styles.stepNumber}>2</span>
+          <span className={styles.stepCopy}><strong>Documents</strong><small>Not part of this form</small></span>
+        </li>
+        <li className={styles.unavailableStep} aria-disabled="true">
+          <span className={styles.stepNumber}>3</span>
+          <span className={styles.stepCopy}><strong>Review</strong><small>After submission</small></span>
+        </li>
+      </ol>
+    </section>
+  );
+}
+
+function RegistrationShell({ children }) {
+  return (
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          <Link className={styles.logo} to="/" aria-label="FlowCut home">
+            <span className={styles.logoMark} aria-hidden="true">F</span>
+            FlowCut
+          </Link>
+          <nav className={styles.nav} aria-label="Main navigation">
+            <Link to="/">Home</Link>
+            <Link to="/discover">Discover</Link>
+          </nav>
+          <div className={styles.headerAccount}>
+            <span>Already manage a shop?</span>
+            <Link className={styles.signIn} to="/login">Sign in</Link>
+          </div>
+        </div>
+      </header>
+      <main className={styles.main}>
+        <div className={styles.pageGrid}>{children}</div>
+      </main>
+    </div>
+  );
+}
+
+function ApplicationSidebar({ completed = false }) {
+  return (
+    <aside className={styles.sidebar}>
+      <section className={styles.introCard}>
+        <p className={styles.introLabel}><span />FLOWCUT ONBOARDING</p>
+        <h2>Let’s get your shop verified.</h2>
+        <p className={styles.introText}>Share your shop details to start the application. Our team will review it before it goes live.</p>
+      </section>
+      <StepList completed={completed} />
+    </aside>
+  );
+}
+
 export default function RegisterShop() {
   const { role, loading: authLoading } = useAuth();
   const location = useLocation();
@@ -52,44 +127,34 @@ export default function RegisterShop() {
 
   if (!role) {
     return (
-      <div className={styles.wrap}>
-        <div className={styles.card}>
-          <div className={styles.brand}>FLOWCUT</div>
-
-          <h1 className={styles.title}>Register a shop</h1>
-
-          <p
-            style={{
-              fontSize: 13,
-              color: 'var(--staff-secondary)',
-              marginBottom: 20,
-            }}
-          >
-            You'll need a FlowCut account first — the shop is linked to
-            whoever is logged in when it's submitted.
-          </p>
-
-          <Button
-            fullWidth
-            onClick={() =>
-              navigate('/login', {
+      <RegistrationShell>
+        <ApplicationSidebar />
+        <section className={styles.formCard} aria-labelledby="shop-login-title">
+          <div className={styles.formHeader}>
+            <span className={styles.eyebrow}>CREATE YOUR SHOP ACCOUNT</span>
+            <h1 className={styles.title} id="shop-login-title">Register your shop</h1>
+            <p className={styles.subtitle}>Sign in to your FlowCut account first. Your application will be linked to the account you use.</p>
+          </div>
+          <div className={styles.loginPrompt}>
+            <p>Already have a FlowCut account? Sign in to continue with your shop application.</p>
+            <Button
+              className={styles.loginButton}
+              fullWidth
+              onClick={() => navigate('/login', {
                 state: {
                   from: {
                     pathname: location.pathname,
                   },
                 },
-              })
-            }
-          >
-            Log in to continue
-          </Button>
-
-          <div className={styles.links} style={{ marginTop: 12 }}>
-            <Link to="/register">Create an account</Link>
-            <Link to="/login">Log in</Link>
+              })}
+            >
+              Sign in to continue
+            </Button>
+            <p className={styles.createAccount}>New to FlowCut? <Link to="/register">Create an account</Link></p>
           </div>
-        </div>
-      </div>
+          <div className={styles.cardFooter}><Link to="/">Back to FlowCut</Link></div>
+        </section>
+      </RegistrationShell>
     );
   }
 
@@ -134,122 +199,134 @@ export default function RegisterShop() {
 
   if (submitted) {
     return (
-      <div className={styles.wrap}>
-        <div className={styles.card}>
-          <div className={styles.brand}>FLOWCUT</div>
-
-          <h1 className={styles.title}>
-            Application submitted
-          </h1>
-
-          <div className={styles.successBox}>
-            <p>
-              Thanks — <strong>{submitted.name}</strong> has been
-              submitted for review. A FlowCut Super Admin needs to
-              approve it before it appears publicly or you can manage
-              it as a Shop Admin.
+      <RegistrationShell>
+        <ApplicationSidebar completed />
+        <section className={styles.formCard} aria-labelledby="application-success-title">
+          <div className={styles.successContent}>
+            <span className={styles.successIcon} aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6" /></svg>
+            </span>
+            <span className={styles.statusPill}>Pending review</span>
+            <h1 className={styles.title} id="application-success-title">We’ve received your application</h1>
+            <p className={styles.subtitle}>
+              Thanks — <strong>{submitted.name}</strong> has been submitted for review. A FlowCut Super Admin needs to approve it before it appears publicly or you can manage it as a Shop Admin.
             </p>
-
-            <p
-              style={{
-                color: 'var(--staff-secondary)',
-                fontSize: 13,
-              }}
-            >
-              This is saved in our database as a real pending
-              application — nothing about this shop is active yet.
-            </p>
-
-            <Link to="/">Back to FlowCut</Link>
+            <p className={styles.pendingNote}>Your application is saved in our database as pending. Nothing about this shop is active yet.</p>
+            <Link className={styles.successLink} to="/">Back to FlowCut</Link>
           </div>
-        </div>
-      </div>
+        </section>
+      </RegistrationShell>
     );
   }
 
   return (
-    <div className={styles.wrap}>
-      <div className={styles.card}>
-        <div className={styles.brand}>FLOWCUT</div>
+    <RegistrationShell>
+      <ApplicationSidebar />
+      <section className={styles.formCard} aria-labelledby="shop-form-title">
+        <header className={styles.formHeader}>
+          <div>
+            <span className={styles.eyebrow}>CREATE YOUR SHOP ACCOUNT</span>
+            <h1 className={styles.title} id="shop-form-title">Register your shop</h1>
+            <p className={styles.subtitle}>Enter your shop details to start the approval process.</p>
+          </div>
+        </header>
 
-        <h1 className={styles.title}>Register a shop</h1>
+        <form className={styles.form} onSubmit={handleSubmit} noValidate>
+          <section className={styles.formSection} aria-labelledby="shop-details-heading">
+            <div className={styles.sectionHeading}>
+              <h2 id="shop-details-heading">Shop details</h2>
+              <p>Tell us how customers can find and contact your shop.</p>
+            </div>
 
-        <p
-          style={{
-            fontSize: 13,
-            color: 'var(--staff-secondary)',
-            marginTop: -12,
-            marginBottom: 20,
-          }}
-        >
-          Your shop will need Super Admin approval before it goes live.
-        </p>
+            <div className={styles.fields}>
+              <div className={`${styles.inputWrap} ${styles.withIcon}`}>
+                <Input
+                  label={<RequiredLabel>Shop name</RequiredLabel>}
+                  name="name"
+                  autoComplete="organization"
+                  value={form.name}
+                  onChange={(e) => update('name', e.target.value)}
+                  error={errors.name}
+                  required
+                  aria-required="true"
+                  placeholder="Your shop name"
+                />
+                <span className={styles.inputIcon}><FieldIcon name="shop" /></span>
+              </div>
 
-        <form onSubmit={handleSubmit} noValidate>
-          <Input
-            label="Shop name"
-            value={form.name}
-            onChange={(e) =>
-              update('name', e.target.value)
-            }
-            error={errors.name}
-          />
+              <div className={`${styles.inputWrap} ${styles.withIcon}`}>
+                <Input
+                  label={<RequiredLabel>Contact number</RequiredLabel>}
+                  type="tel"
+                  name="contactPhone"
+                  autoComplete="tel"
+                  inputMode="numeric"
+                  maxLength={11}
+                  value={form.contactPhone}
+                  onChange={handleContactChange}
+                  error={errors.contactPhone}
+                  required
+                  aria-required="true"
+                  placeholder="09171234567"
+                />
+                <span className={styles.inputIcon}><FieldIcon name="phone" /></span>
+              </div>
 
-          <Input
-            label="Address"
-            value={form.address}
-            onChange={(e) =>
-              update('address', e.target.value)
-            }
-            error={errors.address}
-          />
+              <div className={`${styles.inputWrap} ${styles.withIcon} ${styles.fullWidth}`}>
+                <Input
+                  label={<RequiredLabel>Shop address</RequiredLabel>}
+                  name="address"
+                  autoComplete="street-address"
+                  value={form.address}
+                  onChange={(e) => update('address', e.target.value)}
+                  error={errors.address}
+                  required
+                  aria-required="true"
+                  placeholder="Street, building, or complete shop address"
+                />
+                <span className={styles.inputIcon}><FieldIcon name="address" /></span>
+              </div>
 
-          <Input
-            label="Contact number"
-            type="tel"
-            inputMode="numeric"
-            maxLength={11}
-            value={form.contactPhone}
-            onChange={handleContactChange}
-            error={errors.contactPhone}
-            placeholder="09171234567"
-          />
+              <div className={`${styles.inputWrap} ${styles.withIcon}`}>
+                <Input
+                  label={<RequiredLabel>Opening time</RequiredLabel>}
+                  type="time"
+                  name="openingTime"
+                  value={form.openingTime}
+                  onChange={(e) => update('openingTime', e.target.value)}
+                  error={errors.hours}
+                  required
+                  aria-required="true"
+                />
+                <span className={styles.inputIcon}><FieldIcon name="clock" /></span>
+              </div>
 
-          <Input
-            label="Opening time"
-            type="time"
-            value={form.openingTime}
-            onChange={(e) =>
-              update('openingTime', e.target.value)
-            }
-            error={errors.hours}
-          />
+              <div className={`${styles.inputWrap} ${styles.withIcon}`}>
+                <Input
+                  label={<RequiredLabel>Closing time</RequiredLabel>}
+                  type="time"
+                  name="closingTime"
+                  value={form.closingTime}
+                  onChange={(e) => update('closingTime', e.target.value)}
+                  required
+                  aria-required="true"
+                />
+                <span className={styles.inputIcon}><FieldIcon name="clock" /></span>
+              </div>
+            </div>
+          </section>
 
-          <Input
-            label="Closing time"
-            type="time"
-            value={form.closingTime}
-            onChange={(e) =>
-              update('closingTime', e.target.value)
-            }
-          />
-
-          <Button
-            type="submit"
-            fullWidth
-            disabled={submitting}
-          >
-            {submitting
-              ? 'Submitting…'
-              : 'Submit for approval'}
-          </Button>
+          <footer className={styles.formFooter}>
+            <p><span>*</span> Required fields</p>
+            <div className={styles.footerActions}>
+              <Link className={styles.backLink} to="/">Back to FlowCut</Link>
+              <Button className={styles.submitButton} type="submit" disabled={submitting}>
+                {submitting ? <><span className={styles.spinner} aria-hidden="true" />Submitting…</> : 'Submit for approval'}
+              </Button>
+            </div>
+          </footer>
         </form>
-
-        <div className={styles.links}>
-          <Link to="/">Back to FlowCut</Link>
-          <span />
-        </div>
-      </div>
-    </div>
+      </section>
+    </RegistrationShell>
   );
 }
