@@ -8,7 +8,135 @@ import {
   validateAddress,
   validateContactPhone,
   validateOperatingHours,
+  validateShopRegistration,
 } from '../validation/shopValidation.js';
+import {
+  deleteShopDocument,
+  findShopDocument,
+  openShopDocumentDownload,
+  storeShopDocument,
+} from './shopDocumentStorage.js';
+
+const REGISTRATION_DOCUMENT_NAMES = {
+  mayor: "Business / Mayor's Permit",
+  brgy: 'Barangay Business Clearance',
+  dti: 'DTI Certificate of Business Name Registration',
+  sec: 'SEC Certificate of Registration',
+  bir: 'BIR Certificate of Registration',
+  sanitary: 'Sanitary Permit',
+  fsic: 'Fire Safety Inspection Certificate',
+};
+
+const DOCUMENT_MIME_BY_EXTENSION = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+};
+
+function sanitizeDocumentFilename(filename) {
+  const source = typeof filename === 'string' ? filename : 'document';
+  const safe = Array.from(source, (character) => {
+    const code = character.charCodeAt(0);
+    return character === '/' || character === '\\' || code < 32 || code === 127 ? '_' : character;
+  }).join('').trim().slice(0, 255);
+  return safe || 'document';
+}
+
+function applicationDocumentKeys(shop) {
+  return (shop.registrationDocuments || []).filter((document) => document.fileId && document.fileName).map((document) => document.key);
+}
+
+async function deleteShopDocumentIfUnused(fileId) {
+  if (!fileId) return;
+  try {
+    const references = await Shop.countDocuments({ 'registrationDocuments.fileId': fileId });
+    if (references === 0) await deleteShopDocument(fileId);
+  } catch {
+    // Metadata changes have already committed; leave an inaccessible orphan
+    // rather than reporting that a successful owner action failed.
+    console.error('Shop registration document cleanup failed.');
+  }
+}
+
+function serializeShopApplication(shop) {
+  if (!shop) return null;
+  const fields = {
+    owner: shop.ownerName || '',
+    shop: shop.name || '',
+    phone: shop.contact?.phone || '',
+    email: shop.contact?.email || '',
+    street: shop.addressDetails?.street || '',
+    barangay: shop.addressDetails?.barangay || '',
+    city: shop.addressDetails?.city || '',
+    province: shop.addressDetails?.province || '',
+    lat: shop.location?.latitude == null ? '' : String(shop.location.latitude),
+    lng: shop.location?.longitude == null ? '' : String(shop.location.longitude),
+    confirmed: shop.location?.confirmed === true,
+  };
+  const documents = Object.create(null);
+  for (const doc of shop.registrationDocuments || []) {
+    documents[doc.key] = {
+      number: doc.number || '',
+      issue: doc.issueDate ? new Date(doc.issueDate).toISOString().slice(0, 10) : '',
+      expiry: doc.expiryDate ? new Date(doc.expiryDate).toISOString().slice(0, 10) : '',
+      file: doc.fileId && doc.fileName
+        ? { name: doc.fileName, size: doc.size || 0, mimeType: doc.mimeType || '', status: 'uploaded' }
+        : null,
+    };
+  }
+  return {
+    id: shop._id.toString(),
+    name: shop.name || '',
+    status: shop.status,
+    fields,
+    businessType: shop.businessType || 'sole',
+    documents,
+    savedAt: shop.updatedAt,
+    submittedAt: shop.status === 'PENDING' ? shop.updatedAt : null,
+  };
+}
+
+function applyRegistrationFields(shop, fields) {
+  shop.applicationVersion = 2;
+  shop.contact ||= {};
+  for (const [input, target] of [['owner', 'ownerName'], ['shop', 'name']]) {
+    if (Object.hasOwn(fields, input)) shop[target] = fields[input].trim();
+  }
+  if (Object.hasOwn(fields, 'phone')) shop.contact.phone = fields.phone.trim();
+  if (Object.hasOwn(fields, 'email')) shop.contact.email = fields.email.trim().toLowerCase();
+
+  const addressFields = ['street', 'barangay', 'city', 'province'];
+  if (addressFields.some((key) => Object.hasOwn(fields, key))) {
+    shop.addressDetails = Object.fromEntries(addressFields.map((key) => [key, (fields[key] || '').trim()]));
+    shop.address = addressFields.map((key) => fields[key]?.trim()).filter(Boolean).join(', ');
+  }
+  if (Object.hasOwn(fields, 'businessType')) shop.businessType = fields.businessType;
+  if (Object.hasOwn(fields, 'lat') || Object.hasOwn(fields, 'lng') || Object.hasOwn(fields, 'confirmed')) {
+    const latitude = typeof fields.lat === 'string' ? fields.lat.trim() : '';
+    const longitude = typeof fields.lng === 'string' ? fields.lng.trim() : '';
+    const hasPin = Boolean(latitude && longitude);
+    shop.location = hasPin
+      ? { latitude: Number(latitude), longitude: Number(longitude), confirmed: fields.confirmed === true }
+      : { confirmed: false };
+  }
+  if (isPlainRecord(fields.documents)) {
+    for (const [key, metadata] of Object.entries(fields.documents)) {
+      let doc = shop.registrationDocuments.find((item) => item.key === key);
+      if (!doc) {
+        doc = { key, name: REGISTRATION_DOCUMENT_NAMES[key] || key };
+        shop.registrationDocuments.push(doc);
+      }
+      if (Object.hasOwn(metadata, 'number')) doc.number = metadata.number.trim();
+      if (Object.hasOwn(metadata, 'issue')) doc.issueDate = metadata.issue ? new Date(`${metadata.issue}T00:00:00.000Z`) : null;
+      if (Object.hasOwn(metadata, 'expiry')) doc.expiryDate = metadata.expiry ? new Date(`${metadata.expiry}T00:00:00.000Z`) : null;
+    }
+  }
+}
+
+function isPlainRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 
 function validateShopFields({ name, address, contactPhone, openingTime, closingTime }) {
   const errors = {};
@@ -48,6 +176,9 @@ if (existing) {
   );
 }
 
+  const draft = await Shop.findOne({ ownerId, status: 'DRAFT' });
+  if (draft) throw new AppError(409, 'Continue and submit your saved shop application from the registration page.');
+
   const shop = await Shop.create({
     name: fields.name.trim(),
     address: fields.address.trim(),
@@ -58,6 +189,148 @@ if (existing) {
   });
 
   return shop;
+}
+
+async function getOrCreateShopApplicationDraft(ownerId) {
+  const active = await Shop.findOne({ ownerId, status: { $in: ['PENDING', 'APPROVED', 'SUSPENDED'] } });
+  if (active) throw new AppError(409, 'You already have a pending or active shop application.');
+
+  let draft = await Shop.findOne({ ownerId, status: 'DRAFT' }).sort({ updatedAt: -1 });
+  if (draft) return draft;
+  const rejected = await Shop.findOne({ ownerId, status: 'REJECTED', applicationVersion: 2 }).sort({ updatedAt: -1 });
+  try {
+    return await Shop.create(rejected ? {
+      ownerId,
+      status: 'DRAFT',
+      applicationVersion: 2,
+      name: rejected.name,
+      address: rejected.address,
+      ownerName: rejected.ownerName,
+      contact: { phone: rejected.contact?.phone, email: rejected.contact?.email },
+      businessType: rejected.businessType,
+      addressDetails: rejected.addressDetails?.toObject?.() || rejected.addressDetails,
+      location: rejected.location?.toObject?.() || rejected.location,
+      registrationDocuments: rejected.registrationDocuments.map((document) => document.toObject?.() || document),
+    } : { ownerId, status: 'DRAFT', applicationVersion: 2 });
+  } catch (error) {
+    if (error.code !== 11000) throw error;
+    draft = await Shop.findOne({ ownerId, status: 'DRAFT' });
+    if (!draft) throw error;
+    return draft;
+  }
+}
+
+export async function saveShopApplicationDraft(ownerId, fields) {
+  const errors = validateShopRegistration(fields, { draft: true });
+  if (Object.keys(errors).length) throw new AppError(400, 'Please fix the highlighted fields.', errors);
+  const draft = await getOrCreateShopApplicationDraft(ownerId);
+  applyRegistrationFields(draft, fields);
+  await draft.save();
+  return serializeShopApplication(draft);
+}
+
+export async function submitShopRegistration(ownerId, fields) {
+  const draft = await getOrCreateShopApplicationDraft(ownerId);
+  const draftErrors = validateShopRegistration(fields, { draft: true });
+  if (Object.keys(draftErrors).length) throw new AppError(400, 'Please fix the highlighted fields.', draftErrors);
+  applyRegistrationFields(draft, fields);
+  await draft.save();
+
+  const errors = validateShopRegistration(fields, {
+    uploadedDocuments: applicationDocumentKeys(draft),
+  });
+  if (Object.keys(errors).length) throw new AppError(400, 'Please fix the highlighted fields.', errors);
+
+  draft.status = 'PENDING';
+  draft.applicationVersion = 2;
+  await draft.save();
+  return serializeShopApplication(draft);
+}
+
+function validateUploadedShopDocument({ key, filename, contentType, buffer }) {
+  if (!REGISTRATION_DOCUMENT_NAMES[key]) throw new AppError(400, 'Choose a valid document type.');
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw new AppError(400, 'This file is empty.');
+  if (buffer.length > 5 * 1024 * 1024) throw new AppError(413, 'The file limit is 5 MB.');
+  const safeFilename = sanitizeDocumentFilename(filename);
+  const extension = safeFilename.split('.').pop().toLowerCase();
+  const expectedType = DOCUMENT_MIME_BY_EXTENSION[extension];
+  if (!expectedType || expectedType !== contentType) throw new AppError(400, 'Upload a PDF, JPG or PNG with a matching file type.');
+  const signature = extension === 'pdf'
+    ? buffer.subarray(0, 4).equals(Buffer.from('%PDF'))
+    : extension === 'png'
+      ? buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      : buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (!signature) throw new AppError(400, 'This file does not look like a real PDF, JPG or PNG.');
+  return { safeFilename };
+}
+
+export async function uploadShopApplicationDocument(ownerId, key, { filename, contentType, buffer }) {
+  const { safeFilename } = validateUploadedShopDocument({ key, filename, contentType, buffer });
+  const draft = await getOrCreateShopApplicationDraft(ownerId);
+  const fileId = await storeShopDocument(buffer, safeFilename, contentType, {
+    ownerId: String(ownerId),
+    shopId: String(draft._id),
+    documentKey: key,
+  });
+  const previous = draft.registrationDocuments.find((document) => document.key === key);
+  const previousFileId = previous?.fileId;
+  if (previous) {
+    previous.fileId = fileId;
+    previous.fileName = safeFilename;
+    previous.mimeType = contentType;
+    previous.size = buffer.length;
+    previous.name = REGISTRATION_DOCUMENT_NAMES[key];
+  } else {
+    draft.registrationDocuments.push({
+      key,
+      name: REGISTRATION_DOCUMENT_NAMES[key],
+      fileId,
+      fileName: safeFilename,
+      mimeType: contentType,
+      size: buffer.length,
+    });
+  }
+  try {
+    await draft.save();
+  } catch (error) {
+    await deleteShopDocument(fileId).catch(() => {});
+    throw error;
+  }
+  if (previousFileId) await deleteShopDocumentIfUnused(previousFileId);
+  return { key, name: REGISTRATION_DOCUMENT_NAMES[key], fileName: safeFilename, mimeType: contentType, size: buffer.length, status: 'uploaded' };
+}
+
+export async function removeShopApplicationDocument(ownerId, key) {
+  const draft = await Shop.findOne({ ownerId, status: 'DRAFT' });
+  if (!draft) throw new AppError(404, 'Draft application not found.');
+  const index = draft.registrationDocuments.findIndex((document) => document.key === key);
+  if (index < 0) return { removed: true };
+  const [document] = draft.registrationDocuments.splice(index, 1);
+  await draft.save();
+  if (document.fileId) await deleteShopDocumentIfUnused(document.fileId);
+  return { removed: true };
+}
+
+async function findAuthorizedShopDocument(shop, key) {
+  const document = shop?.registrationDocuments?.find((item) => item.key === key && item.fileId);
+  if (!document) throw new AppError(404, 'Document not found.');
+  const file = await findShopDocument(document.fileId);
+  if (!file || String(file.metadata?.ownerId) !== String(shop.ownerId) || file.metadata?.documentKey !== key) {
+    throw new AppError(404, 'Document not found.');
+  }
+  return { document, file, stream: openShopDocumentDownload(document.fileId) };
+}
+
+export async function getMyShopApplicationDocument(ownerId, key) {
+  const shop = await Shop.findOne({ ownerId, status: { $in: ['DRAFT', 'PENDING', 'REJECTED', 'APPROVED', 'SUSPENDED'] } }).sort({ updatedAt: -1 });
+  if (!shop) throw new AppError(404, 'Document not found.');
+  return findAuthorizedShopDocument(shop, key);
+}
+
+export async function getAdminShopApplicationDocument(shopId, key) {
+  const shop = await Shop.findOne({ _id: shopId, status: { $ne: 'DRAFT' } });
+  if (!shop) throw new AppError(404, 'Document not found.');
+  return findAuthorizedShopDocument(shop, key);
 }
 
 export async function getPublicShops() {
@@ -199,11 +472,11 @@ export async function updateOwnShop(shopId, fields) {
 // ---- Super Admin ----
 
 export async function getAllShopsForAdmin() {
-  return Shop.find().sort({ createdAt: -1 });
+  return Shop.find({ status: { $ne: 'DRAFT' } }).sort({ createdAt: -1 });
 }
 
 export async function getShopForAdmin(shopId) {
-  const shop = await Shop.findById(shopId);
+  const shop = await Shop.findOne({ _id: shopId, status: { $ne: 'DRAFT' } });
   if (!shop) throw new AppError(404, 'Shop not found.');
   return shop;
 }
@@ -338,13 +611,7 @@ export async function rejectShop(shopId, approverId, reason) {
   return shop;
 }
 export async function getMyShopApplication(ownerId) {
-  const shop = await Shop.findOne({ ownerId }).sort({ createdAt: -1 });
-
-  if (!shop) return null;
-
-  return {
-    id: shop._id.toString(),
-    name: shop.name,
-    status: shop.status,
-  };
+  const shop = await Shop.findOne({ ownerId, status: 'DRAFT' }).sort({ updatedAt: -1 })
+    || await Shop.findOne({ ownerId }).sort({ updatedAt: -1 });
+  return serializeShopApplication(shop);
 }

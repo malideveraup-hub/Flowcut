@@ -69,6 +69,12 @@ function ProfileSettings({ user, onSave, onLogout, onDeleteAccount, shopApplicat
       title: 'Application under review',
       text: `We're reviewing ${shopApplication?.name ? `${shopApplication.name}'s details` : 'your shop details'}. You'll be notified once a decision is made.`,
     },
+    draft: {
+      pill: 'Draft in progress',
+      title: shopApplication?.name || 'Shop application draft',
+      text: 'Continue your shop application when you’re ready to add the required documents and submit it for review.',
+      action: <Link className={`${styles.button} ${styles.solid}`} to="/register-shop">Continue application</Link>,
+    },
     approved: {
       pill: 'Approved shop owner',
       title: shopApplication?.name || 'Your shop',

@@ -191,11 +191,24 @@
 .closeButton { width: 34px; height: 34px; flex: 0 0 auto; border: 1px solid var(--approval-line); border-radius: 7px; background: #fff; color: var(--approval-muted); font-size: 22px; line-height: 1; cursor: pointer; }
 .documentHeading { display: flex; justify-content: space-between; gap: 10px; margin: 20px 0 9px; color: var(--approval-muted); font-size: 11px; }
 .documentHeading strong { color: var(--approval-ink); font-size: 12px; }
+.applicationDetails { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin: 16px 0 0; padding: 12px; border: 1px solid var(--approval-line); border-radius: 8px; background: #faf9fd; }
+.applicationDetails > div { min-width: 0; }
+.applicationDetails dt { color: var(--approval-muted); font-size: 10px; }
+.applicationDetails dd { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 11px; font-weight: 600; }
 .documentList { display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .documentList li { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 10px; border: 1px solid var(--approval-line); border-radius: 7px; font-size: 11px; }
 .documentList li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
 .documentList li a, .documentList li small { margin-left: auto; color: var(--approval-muted); font-size: 10px; white-space: nowrap; }
 .documentList li a { color: var(--approval-purple); font-weight: 600; }
+.documentCopy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.documentCopy b { overflow-wrap: anywhere; font-size: 11px; }
+.documentCopy small { color: var(--approval-muted); font-size: 10px; overflow-wrap: anywhere; }
+.viewDocumentButton { flex: 0 0 auto; margin-left: auto; padding: 5px 8px; border: 1px solid var(--approval-line); border-radius: 6px; background: #fff; color: var(--approval-purple); font-size: 10px; font-weight: 600; }
+.viewDocumentButton:disabled { opacity: .55; }
+.documentPreview { margin-top: 12px; padding: 10px; border: 1px solid var(--approval-line); border-radius: 8px; background: #f8f7fc; }
+.documentPreview > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; font-size: 11px; }
+.documentPreview > div button { border: 0; background: transparent; color: var(--approval-purple); font-size: 10px; font-weight: 600; }
+.documentPreview img, .documentPreview iframe { display: block; width: 100%; height: min(55vh, 520px); border: 0; border-radius: 5px; background: #fff; object-fit: contain; }
 .fileMark { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--approval-purple-soft); color: var(--approval-purple); font-size: 11px; font-weight: 700; }
 .dialogActions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 18px; }
 .error { color: var(--approval-red); }

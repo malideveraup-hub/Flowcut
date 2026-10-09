@@ -1,18 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { approveShop, fetchAllShops, fetchAllUsers, rejectShop } from '../../api/adminApi';
+import { fetchAdminShopApplicationDocument } from '../../api/shopApi';
 import { useAsync } from '../../hooks/useAsync';
 import Skeleton from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/ToastContext';
 import styles from './ShopApproval.module.css';
 
 const PAGE_SIZE = 6;
-const DOCUMENTS = [
-  'Business registration (DTI/SEC)',
-  "Mayor's / business permit",
-  'Barber license or certificate',
-  'Owner government ID',
-];
-
 function formatDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
@@ -26,15 +20,12 @@ function getOwner(shop, users) {
 }
 
 function getDocuments(shop) {
-  return Array.isArray(shop.documents) ? shop.documents : [];
+  const documents = Array.isArray(shop.registrationDocuments) ? shop.registrationDocuments : shop.documents;
+  return Array.isArray(documents) ? documents : [];
 }
 
 function getDocumentName(document, index) {
-  return document.name || document.label || document.fileName || DOCUMENTS[index] || `Document ${index + 1}`;
-}
-
-function getDocumentUrl(document) {
-  return document.url || document.fileUrl || document.path || '';
+  return document.name || document.label || document.fileName || `Document ${index + 1}`;
 }
 
 export default function ShopApproval() {
@@ -45,9 +36,29 @@ export default function ShopApproval() {
   const [sort, setSort] = useState('oldest');
   const [page, setPage] = useState(1);
   const [reviewing, setReviewing] = useState(null);
+  const [documentPreview, setDocumentPreview] = useState(null);
+  const [loadingDocument, setLoadingDocument] = useState('');
+  const [documentError, setDocumentError] = useState('');
 
   const shops = data?.[0] || [];
   const users = data?.[1] || [];
+
+  useEffect(() => () => {
+    if (documentPreview?.url) URL.revokeObjectURL(documentPreview.url);
+  }, [documentPreview]);
+
+  async function viewApplicationDocument(shop, document) {
+    setLoadingDocument(document.key);
+    setDocumentError('');
+    try {
+      const blob = await fetchAdminShopApplicationDocument(shop._id, document.key);
+      setDocumentPreview({ url: URL.createObjectURL(blob), type: blob.type, name: document.fileName || document.name });
+    } catch (error) {
+      setDocumentError(error.message || 'Could not open this document.');
+    } finally {
+      setLoadingDocument('');
+    }
+  }
 
   if (loading) return <Skeleton height={220} />;
   if (error) return <p className={styles.error}>{error.message}</p>;
@@ -201,9 +212,9 @@ export default function ShopApproval() {
                 <div className={styles.location}>{shop.address || 'Address not provided'}</div>
                 <time className={styles.submitted} dateTime={shop.createdAt}>{formatDate(shop.createdAt)}</time>
                 <div className={styles.documentCell}>
-                  <button className={styles.documentButton} type="button" onClick={() => setReviewing(shop)}>
+                  <button className={styles.documentButton} type="button" onClick={() => { setDocumentPreview(null); setDocumentError(''); setReviewing(shop); }}>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5" /></svg>
-                    {documents.length} document{documents.length === 1 ? '' : 's'}
+                    {documents.filter((document) => document.fileId || document.url || document.fileUrl).length} document{documents.filter((document) => document.fileId || document.url || document.fileUrl).length === 1 ? '' : 's'}
                   </button>
                 </div>
                 <div className={styles.statusCell}><span className={`${styles.status} ${statusClass}`}>{shop.status === 'PENDING' ? 'Needs review' : shop.status}</span></div>
@@ -231,12 +242,11 @@ export default function ShopApproval() {
         <div>
           <h2>Approval checklist</h2>
           <ul>
-            <li>Business registration (DTI/SEC) is valid</li>
-            <li>Barber licenses or certificates provided</li>
+            <li>DTI or SEC registration matches the selected business type</li>
+            <li>Business / Mayor’s permit dates are current</li>
+            <li>BIR registration and city-required permits are provided</li>
             <li>Shop address matches submitted documents</li>
-            <li>Mayor's/business permit is current</li>
-            <li>Owner ID matches the registered account</li>
-            <li>Contact email is verified</li>
+            <li>Applicant and contact details match the records</li>
           </ul>
         </div>
       </section>
@@ -246,26 +256,35 @@ export default function ShopApproval() {
           <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="review-title">
             <div className={styles.dialogHeading}>
               <div><h2 id="review-title">{reviewing.name}</h2><p>Owner · {getOwner(reviewing, users)?.name || 'Owner details unavailable'} · {reviewing.address || 'Address not provided'}</p></div>
-              <button className={styles.closeButton} type="button" aria-label="Close review" onClick={() => setReviewing(null)}>×</button>
+              <button className={styles.closeButton} type="button" aria-label="Close review" onClick={() => { setReviewing(null); setDocumentPreview(null); setDocumentError(''); }}>×</button>
             </div>
-            <div className={styles.documentHeading}><strong>Submitted documents</strong><span>{getDocuments(reviewing).length} of {DOCUMENTS.length} on file</span></div>
+            <dl className={styles.applicationDetails}>
+              <div><dt>Applicant</dt><dd>{reviewing.ownerName || getOwner(reviewing, users)?.name || '—'}</dd></div>
+              <div><dt>Business type</dt><dd>{{ sole: 'Sole Proprietorship', corp: 'Corporation', part: 'Partnership' }[reviewing.businessType] || '—'}</dd></div>
+              <div><dt>Contact</dt><dd>{reviewing.contact?.phone || '—'}{reviewing.contact?.email ? ` · ${reviewing.contact.email}` : ''}</dd></div>
+              <div><dt>Address</dt><dd>{reviewing.address || '—'}</dd></div>
+              {reviewing.location?.latitude != null && <div><dt>Map pin</dt><dd>{reviewing.location.latitude}, {reviewing.location.longitude}{reviewing.location.confirmed ? ' · Confirmed' : ''}</dd></div>}
+            </dl>
+            <div className={styles.documentHeading}><strong>Submitted documents</strong><span>{getDocuments(reviewing).filter((document) => document.fileId || document.url || document.fileUrl).length} uploaded</span></div>
             <ul className={styles.documentList}>
-              {DOCUMENTS.map((label, index) => {
-                const document = getDocuments(reviewing)[index];
-                const url = document ? getDocumentUrl(document) : '';
-                return (
-                  <li key={label}>
-                    <span className={styles.fileMark} aria-hidden="true">{document ? '✓' : '—'}</span>
-                    <span>{document ? getDocumentName(document, index) : label}</span>
-                    {document && url
-                      ? <a href={url} target="_blank" rel="noreferrer">View file</a>
-                      : <small>{document ? 'File details unavailable' : 'Not on file'}</small>}
-                  </li>
-                );
+              {getDocuments(reviewing).filter((document) => !((reviewing.businessType === 'sole' && document.key === 'sec') || (reviewing.businessType !== 'sole' && document.key === 'dti'))).map((document, index) => {
+                const uploaded = Boolean(document.fileId || document.url || document.fileUrl);
+                return <li key={document.key || document.fileName || index}>
+                  <span className={styles.fileMark} aria-hidden="true">{uploaded ? '✓' : '—'}</span>
+                  <span className={styles.documentCopy}><b>{getDocumentName(document, index)}</b><small>{[document.number, document.issueDate && `Issued ${formatDate(document.issueDate)}`, document.expiryDate && `Expires ${formatDate(document.expiryDate)}`, document.fileName].filter(Boolean).join(' · ')}</small></span>
+                  {uploaded && document.key
+                    ? <button className={styles.viewDocumentButton} type="button" disabled={loadingDocument === document.key} onClick={() => viewApplicationDocument(reviewing, document)}>{loadingDocument === document.key ? 'Opening…' : 'View file'}</button>
+                    : <small>{uploaded ? 'File details unavailable' : 'Not on file'}</small>}
+                </li>;
               })}
             </ul>
+            {documentError && <p className={styles.error}>{documentError}</p>}
+            {documentPreview && <div className={styles.documentPreview}>
+              <div><strong>{documentPreview.name}</strong><button type="button" onClick={() => setDocumentPreview(null)}>Close preview</button></div>
+              {documentPreview.type.startsWith('image/') ? <img src={documentPreview.url} alt={documentPreview.name} /> : <iframe src={documentPreview.url} title={documentPreview.name} />}
+            </div>}
             <div className={styles.dialogActions}>
-              <button className={styles.actionButton} type="button" onClick={() => setReviewing(null)}>Close</button>
+              <button className={styles.actionButton} type="button" onClick={() => { setReviewing(null); setDocumentPreview(null); }}>Close</button>
               {reviewing.status === 'PENDING' && <button className={`${styles.actionButton} ${styles.rejectButton}`} type="button" onClick={() => handleReject(reviewing)}>Reject</button>}
               {reviewing.status === 'PENDING' && <button className={`${styles.actionButton} ${styles.approveButton}`} type="button" onClick={() => { handleApprove(reviewing); setReviewing(null); }}>Approve</button>}
             </div>

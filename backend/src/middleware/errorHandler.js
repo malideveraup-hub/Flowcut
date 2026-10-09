@@ -59,6 +59,14 @@ export function errorHandler(err, req, res, _next) {
     return res.status(err.statusCode).json({ success: false, message: err.message, errors: err.errors });
   }
 
+  if (err.status === 413 || err.statusCode === 413 || err.type === 'entity.too.large') {
+    return res.status(413).json({
+      success: false,
+      message: 'Request body is too large. Files may be up to 5 MB.',
+      errors: [],
+    });
+  }
+
   const translated = translateMongooseError(err);
   if (translated) {
     return res.status(translated.statusCode).json({

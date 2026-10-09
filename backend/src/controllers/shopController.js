@@ -2,6 +2,20 @@ import * as shopService from '../services/shopService.js';
 import { Barber, QueueEntry, Service, User } from '../models/index.js';
 import { computeLiveWaitEstimate } from '../utils/waitEstimate.js';
 
+function sendPrivateDocument(res, next, lookup) {
+  Promise.resolve(lookup).then(({ document, file, stream }) => {
+    res.set({
+      'Content-Type': document.mimeType || 'application/octet-stream',
+      'Content-Length': String(file.length),
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(document.fileName || file.filename)}`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    stream.on('error', next);
+    stream.pipe(res);
+  }).catch(next);
+}
+
 export async function listPublicShops(req, res, next) {
   try {
     const shops = await shopService.getPublicShops();
@@ -66,6 +80,56 @@ export async function getMyShopApplication(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+export async function saveMyShopApplicationDraft(req, res, next) {
+  try {
+    const application = await shopService.saveShopApplicationDraft(req.user.id, req.body);
+    res.json({ success: true, data: { application } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function submitMyShopRegistration(req, res, next) {
+  try {
+    const application = await shopService.submitShopRegistration(req.user.id, req.body);
+    res.status(201).json({ success: true, data: { application } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function uploadMyShopApplicationDocument(req, res, next) {
+  try {
+    let filename = req.get('x-file-name') || '';
+    try { filename = decodeURIComponent(filename); } catch { /* Invalid encoded names are validated as plain text below. */ }
+    const document = await shopService.uploadShopApplicationDocument(req.user.id, req.params.key, {
+      filename,
+      contentType: req.get('content-type')?.split(';')[0].trim().toLowerCase(),
+      buffer: req.body,
+    });
+    res.status(201).json({ success: true, data: { document } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function removeMyShopApplicationDocument(req, res, next) {
+  try {
+    const result = await shopService.removeShopApplicationDocument(req.user.id, req.params.key);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export function getMyShopApplicationDocument(req, res, next) {
+  sendPrivateDocument(res, next, shopService.getMyShopApplicationDocument(req.user.id, req.params.key));
+}
+
+export function getAdminShopApplicationDocument(req, res, next) {
+  sendPrivateDocument(res, next, shopService.getAdminShopApplicationDocument(req.params.shopId, req.params.key));
 }
 
 export async function getMyFavoriteShops(req, res, next) {

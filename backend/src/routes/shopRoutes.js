@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import express from 'express';
 import * as shopController from '../controllers/shopController.js';
 import * as serviceController from '../controllers/serviceController.js';
 import * as queueController from '../controllers/queueController.js';
@@ -18,6 +19,33 @@ router.get(
   '/my-application',
   requireAuth,
   shopController.getMyShopApplication
+);
+
+router.post(
+  '/my-application/draft',
+  requireAuth,
+  requireCurrentConsent,
+  shopController.saveMyShopApplicationDraft
+);
+router.post(
+  '/my-application/submit',
+  requireAuth,
+  requireCurrentConsent,
+  shopController.submitMyShopRegistration
+);
+router.get('/my-application/documents/:key', requireAuth, shopController.getMyShopApplicationDocument);
+router.post(
+  '/my-application/documents/:key',
+  requireAuth,
+  requireCurrentConsent,
+  express.raw({ type: () => true, limit: '5mb' }),
+  shopController.uploadMyShopApplicationDocument
+);
+router.delete(
+  '/my-application/documents/:key',
+  requireAuth,
+  requireCurrentConsent,
+  shopController.removeMyShopApplicationDocument
 );
 
 router.get('/favorites', requireAuth, requireRole('customer'), shopController.getMyFavoriteShops);

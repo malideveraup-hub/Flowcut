@@ -1,4 +1,4 @@
-import { apiRequest } from './httpClient';
+import { apiBlobRequest, apiRequest, apiUploadRequest } from './httpClient';
 
 // ---- Public ----
 
@@ -30,6 +30,40 @@ export function submitShopApplication(fields) {
 
 export function fetchMyShopApplication() {
   return apiRequest('/api/shops/my-application').then((d) => d.shop);
+}
+
+export function saveMyShopApplicationDraft(application) {
+  return apiRequest('/api/shops/my-application/draft', { method: 'POST', body: application }).then((d) => d.application);
+}
+
+export function submitMyShopRegistration(application) {
+  return apiRequest('/api/shops/my-application/submit', { method: 'POST', body: application }).then((d) => d.application);
+}
+
+export function uploadMyShopApplicationDocument(key, file, onProgress) {
+  const extension = file.name.split('.').pop().toLowerCase();
+  const fallbackType = extension === 'pdf' ? 'application/pdf' : extension === 'png' ? 'image/png' : 'image/jpeg';
+  return apiUploadRequest(
+    `/api/shops/my-application/documents/${encodeURIComponent(key)}`,
+    file,
+    {
+      'Content-Type': file.type || fallbackType,
+      'X-File-Name': encodeURIComponent(file.name),
+    },
+    onProgress
+  ).then((d) => d.document);
+}
+
+export function removeMyShopApplicationDocument(key) {
+  return apiRequest(`/api/shops/my-application/documents/${encodeURIComponent(key)}`, { method: 'DELETE' });
+}
+
+export function fetchMyShopApplicationDocument(key) {
+  return apiBlobRequest(`/api/shops/my-application/documents/${encodeURIComponent(key)}`);
+}
+
+export function fetchAdminShopApplicationDocument(shopId, key) {
+  return apiBlobRequest(`/api/admin/shops/${encodeURIComponent(shopId)}/documents/${encodeURIComponent(key)}`);
 }
 // ---- Customer queue actions ----
 
