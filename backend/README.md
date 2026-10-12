@@ -28,6 +28,37 @@ Open `.env` and fill in:
   ```
 - Leave the rest as-is for local development.
 
+## Closed-browser queue push notifications
+
+The customer notification settings can save a browser push subscription for
+the signed-in account. The backend sends Web Push for the existing 10-minute
+(`NEAR_TURN`) and 5-minute (`ARRIVE_SOON`) queue reminders. Push keys are
+optional for local development; without them, page-open alerts continue to
+work but reminders cannot arrive after the browser is closed.
+
+Generate one VAPID key pair from the `backend/` folder:
+
+```bash
+npx web-push generate-vapid-keys --json
+```
+
+Add the output to `backend/.env` and to the Render service's environment:
+
+```env
+VAPID_PUBLIC_KEY=<generated publicKey>
+VAPID_PRIVATE_KEY=<generated privateKey>
+VAPID_SUBJECT=https://www.flowcutph.me
+```
+
+Keep the same key pair when redeploying; replacing it invalidates existing
+browser subscriptions. The public key is served to signed-in customers by the
+API, while the private key stays on the backend. Customers enable push from
+the notification bell after signing in. On iPhone/iPad, first use Safari's
+Share menu to add FlowCut to the Home Screen, open it from that icon, then
+enable notifications from the bell. iOS web push requires iOS/iPadOS 16.4 or
+later and an installed Home Screen web app. Android browsers need notification
+permission; installing FlowCut is recommended.
+
 ## Run it
 
 ```bash
@@ -176,7 +207,8 @@ barrel for convenient importing later:
 | `QueueEntry` | `queueentries` | A customer's position in a shop's queue |
 | `ServiceLog` | `servicelogs` | The real historical record of what actually happened during a service — feeds future wait-time predictions |
 | `WaitingEstimate` | `waitingestimates` | A timestamped snapshot of an estimated wait *range* (never a single fake-precise number) |
-| `Notification` | `notifications` | Web/SMS notification records (no sending logic yet) |
+| `Notification` | `notifications` | Queue and shop updates; 10-/5-minute reminders can also be delivered with Web Push |
+| `PushSubscription` | `pushsubscriptions` | Browser endpoints and cryptographic keys for customer Web Push |
 | `AuditLog` | `auditlogs` | Administrative accountability trail (shop approvals, etc.) — never exposed publicly |
 
 ### Relationships
@@ -197,6 +229,7 @@ ServiceLog.serviceId    -> Service
 WaitingEstimate.queueEntryId -> QueueEntry
 Notification.userId -> User
 Notification.shopId -> Shop (nullable)
+PushSubscription.userId -> User
 AuditLog.userId -> User
 AuditLog.shopId -> Shop (nullable)
 ```
@@ -235,6 +268,7 @@ See each model file for inline reasoning. Summary:
 - `ServiceLog`: `queueEntryId`, `barberId`, `serviceId`, `startTime`
 - `WaitingEstimate`: `queueEntryId + calculatedAt` (descending — history, not overwritten)
 - `Notification`: `userId + read`, `userId + createdAt`
+- `PushSubscription`: unique `endpoint`, `userId`
 - `AuditLog`: `userId + createdAt`, `shopId + createdAt`
 
 ### Confirmed NOT done in this phase
@@ -339,7 +373,11 @@ operations and makes all four roles genuinely reachable and testable.
 **Any authenticated user:**
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/shops` | Submit a shop application (`ownerId` always `req.user.id`) |
+| GET | `/api/shops/my-application` | Load the owner’s draft or submitted application |
+| POST | `/api/shops/my-application/draft` | Save a draft (`ownerId` always `req.user.id`) |
+| POST | `/api/shops/my-application/submit` | Validate and submit the full application for review |
+| GET/POST/DELETE | `/api/shops/my-application/documents/:key` | Read, privately upload to MongoDB GridFS (5 MB max), or remove an owner’s draft file |
+| POST | `/api/shops` | Legacy shop application endpoint (`ownerId` always `req.user.id`) |
 
 **Customer** (`requireRole('customer')`):
 | Method | Path | Purpose |
@@ -370,6 +408,7 @@ operations and makes all four roles genuinely reachable and testable.
 | Method | Path |
 |---|---|
 | GET | `/api/admin/shops`, `/api/admin/shops/:shopId` |
+| GET | `/api/admin/shops/:shopId/documents/:key` (private application file) |
 | PATCH | `/api/admin/shops/:shopId/approve`, `/reject` |
 | GET | `/api/admin/users` |
 | GET | `/api/admin/analytics/basic` (live counts only — no historical data) |

@@ -1,5 +1,6 @@
 import { createContext, useContext, useCallback, useEffect, useState } from 'react';
 import { getMeRequest, logoutRequest } from '../api/authApi';
+import { unregisterQueuePushSubscription } from './queueBrowserAlerts';
 
 const AuthContext = createContext(null);
 
@@ -44,6 +45,7 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     try {
+      await unregisterQueuePushSubscription();
       await logoutRequest();
     } finally {
       setUser(null);

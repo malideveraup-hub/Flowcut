@@ -1,3 +1,5 @@
+import { removeMyPushSubscription } from '../api/shopApi';
+
 let serviceWorkerRegistrationPromise;
 let alertAudioContext;
 const SHOWN_ALERTS_STORAGE_KEY = 'flowcut:shown-queue-browser-alerts';
@@ -24,6 +26,22 @@ function rememberShownAlert(id) {
 export function getBrowserAlertPermission() {
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
   return window.Notification.permission;
+}
+
+export function requiresHomeScreenForPush() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isInstalled = window.matchMedia?.('(display-mode: standalone)')?.matches
+    || navigator.standalone === true;
+  return isIos && !isInstalled;
+}
+
+export function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from(rawData, (character) => character.charCodeAt(0));
 }
 
 export function registerQueueAlertServiceWorker() {
@@ -60,7 +78,8 @@ async function unlockAlertSound() {
 export async function enableQueueBrowserAlerts() {
   // Start both operations directly in the button's user gesture so Chrome can
   // show its permission prompt and unlock audio playback.
-  const permissionRequest = getBrowserAlertPermission() === 'default'
+  const needsHomeScreen = requiresHomeScreenForPush();
+  const permissionRequest = !needsHomeScreen && getBrowserAlertPermission() === 'default'
     ? window.Notification.requestPermission()
     : Promise.resolve(getBrowserAlertPermission());
   const soundRequest = unlockAlertSound();
@@ -69,7 +88,9 @@ export async function enableQueueBrowserAlerts() {
   let registrationAvailable = false;
   let registrationError = '';
 
-  if (permission === 'granted') {
+  if (needsHomeScreen) {
+    registrationError = 'On iPhone or iPad, add FlowCut to your Home Screen, open it from the new icon, then enable alerts.';
+  } else if (permission === 'granted') {
     try {
       await registerQueueAlertServiceWorker();
       registrationAvailable = true;
@@ -79,6 +100,25 @@ export async function enableQueueBrowserAlerts() {
   }
 
   return { permission, soundEnabled, registrationAvailable, registrationError };
+}
+
+export async function unregisterQueuePushSubscription() {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    const subscription = await registration?.pushManager?.getSubscription();
+    if (!subscription) return;
+
+    try {
+      await removeMyPushSubscription(subscription.endpoint);
+    } catch {
+      // A stale server record is removed after its push service reports it expired.
+    }
+    await subscription.unsubscribe().catch(() => {});
+  } catch {
+    // Logging out must still work if this browser does not support push.
+  }
 }
 
 function playAlertSound() {
@@ -102,14 +142,14 @@ function playAlertSound() {
   return true;
 }
 
-export async function showQueueBrowserAlert(notification) {
-  if (readShownAlertIds().has(notification.id)) return false;
+export async function showQueueBrowserAlert(notification, { showSystemNotification = true } = {}) {
+  if (readShownAlertIds().has(notification.id)) return true;
 
   let displayed = false;
   const pageIsVisible = typeof document !== 'undefined' && document.visibilityState === 'visible';
   const pageSoundReady = pageIsVisible && alertAudioContext?.state === 'running';
 
-  if (getBrowserAlertPermission() === 'granted') {
+  if (showSystemNotification && getBrowserAlertPermission() === 'granted') {
     const options = {
       body: notification.message,
       icon: '/favicon.svg',

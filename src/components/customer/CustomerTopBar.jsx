@@ -31,6 +31,9 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
     browserAlertSoundEnabled,
     browserAlertBusy,
     browserAlertError,
+    browserPushEnabled,
+    browserPushConfigured,
+    browserPushNeedsHomeScreen,
     enableBrowserAlerts,
   } = notificationState;
 
@@ -129,40 +132,52 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
                   </button>
                 </header>
                 <div className={styles.browserAlertSettings}>
-                  {browserAlertPermission === 'granted' && browserAlertSoundEnabled && !browserAlertError ? (
-                    <p className={styles.browserAlertStatus}>Browser alerts and sound are enabled for 10- and 5-minute reminders.</p>
+                  {browserPushEnabled ? (
+                    <p className={styles.browserAlertStatus}>
+                      Push reminders are enabled for when FlowCut is closed. {browserAlertSoundEnabled
+                        ? 'Page sound is also enabled while FlowCut is open.'
+                        : 'Enable page sound for reminders while FlowCut is open.'}
+                    </p>
+                  ) : browserPushNeedsHomeScreen ? (
+                    <p className={styles.browserAlertStatus}>
+                      On iPhone or iPad, use Share → Add to Home Screen, then open FlowCut from its icon and enable alerts here.
+                    </p>
+                  ) : browserPushConfigured === false ? (
+                    <p className={styles.browserAlertStatus}>
+                      Closed-browser reminders are not configured on this server yet. Page sound and browser alerts work while FlowCut is open.
+                    </p>
+                  ) : browserAlertPermission === 'denied' ? (
+                    <p className={styles.browserAlertStatus}>Allow notifications for FlowCut in your browser settings. Page sound works while FlowCut is open.</p>
+                  ) : browserAlertPermission === 'unsupported' ? (
+                    <p className={styles.browserAlertStatus}>This browser cannot show system notifications. Page sound works while FlowCut is open.</p>
+                  ) : browserAlertPermission === 'granted' ? (
+                    <p className={styles.browserAlertStatus}>
+                      {browserAlertError
+                        ? 'Push alerts could not be enabled. Page sound works while FlowCut is open.'
+                        : 'Turn on push alerts to receive your 10- and 5-minute reminders while FlowCut is closed.'}
+                    </p>
                   ) : (
-                    <>
-                      {browserAlertPermission === 'denied' ? (
-                        <p className={styles.browserAlertStatus}>Allow notifications for FlowCut in Chrome site settings. Page sound works while FlowCut is open.</p>
-                      ) : browserAlertPermission === 'unsupported' ? (
-                        <p className={styles.browserAlertStatus}>System notifications are unavailable here. Page sound works while FlowCut is open.</p>
-                      ) : browserAlertPermission === 'granted' ? (
-                        <p className={styles.browserAlertStatus}>
-                          {browserAlertError
-                            ? 'Chrome alerts could not be prepared. Page sound works while FlowCut is open.'
-                            : 'Browser notifications are allowed. Enable page sound for 10- and 5-minute reminders.'}
-                        </p>
-                      ) : (
-                        <p className={styles.browserAlertStatus}>Get a sound and browser alert when your turn is about 10 or 5 minutes away.</p>
-                      )}
-                      <button
-                        type="button"
-                        className={styles.enableBrowserAlertsButton}
-                        onClick={() => void enableBrowserAlerts()}
-                        disabled={browserAlertBusy}
-                      >
-                        {browserAlertBusy
-                          ? 'Enabling alerts…'
-                          : browserAlertPermission === 'denied' || browserAlertPermission === 'unsupported'
+                    <p className={styles.browserAlertStatus}>Get a sound and push reminder when your turn is about 10 or 5 minutes away.</p>
+                  )}
+                  {(!browserPushEnabled || !browserAlertSoundEnabled) && (
+                    <button
+                      type="button"
+                      className={styles.enableBrowserAlertsButton}
+                      onClick={() => void enableBrowserAlerts()}
+                      disabled={browserAlertBusy}
+                    >
+                      {browserAlertBusy
+                        ? 'Enabling alerts…'
+                        : browserPushEnabled
+                          ? 'Enable page sound'
+                          : browserPushNeedsHomeScreen || browserPushConfigured === false || browserAlertPermission === 'denied' || browserAlertPermission === 'unsupported'
                             ? 'Enable page sound'
                             : browserAlertError
-                              ? 'Retry browser alerts'
-                              : 'Enable browser alerts and sound'}
-                      </button>
-                    </>
+                              ? 'Retry push alerts'
+                              : 'Enable push alerts and sound'}
+                    </button>
                   )}
-                  {browserAlertPermission === 'granted' && browserAlertError && (
+                  {browserAlertError && !browserPushNeedsHomeScreen && (
                     <p className={styles.browserAlertError}>{browserAlertError}</p>
                   )}
                 </div>

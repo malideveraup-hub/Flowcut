@@ -39,6 +39,12 @@ function loadEnv() {
     );
   }
 
+  const vapidPublicKey = (process.env.VAPID_PUBLIC_KEY || '').trim();
+  const vapidPrivateKey = (process.env.VAPID_PRIVATE_KEY || '').trim();
+  if (Boolean(vapidPublicKey) !== Boolean(vapidPrivateKey)) {
+    throw new Error('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must both be set to enable web push.');
+  }
+
   return {
     nodeEnv: process.env.NODE_ENV || 'development',
     port: Number(process.env.PORT) || 4000,
@@ -52,6 +58,9 @@ function loadEnv() {
     smtpPass: (process.env.SMTP_PASS || '').replace(/\s+/g, ''),
     mailFrom: (process.env.MAIL_FROM || process.env.SMTP_USER || '').trim(),
     resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
+    vapidPublicKey,
+    vapidPrivateKey,
+    vapidSubject: (process.env.VAPID_SUBJECT || 'https://www.flowcutph.me').trim(),
   };
 }
 

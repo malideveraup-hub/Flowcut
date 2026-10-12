@@ -1,4 +1,5 @@
 import Notification from '../models/Notification.js';
+import { sendQueuePushNotification } from './webPushService.js';
 
 export async function createNotificationOnce(fields) {
   try {
@@ -7,7 +8,15 @@ export async function createNotificationOnce(fields) {
       { $setOnInsert: { ...fields, read: false, channel: 'WEB' } },
       { upsert: true }
     );
-    return result.upsertedCount === 1;
+    if (result.upsertedCount !== 1) return false;
+
+    if (fields.type === 'NEAR_TURN' || fields.type === 'ARRIVE_SOON') {
+      void sendQueuePushNotification(result.upsertedId, fields).catch((error) => {
+        console.error('[web-push] Could not send queue reminder:', error.message);
+      });
+    }
+
+    return true;
   } catch (error) {
     if (error.code === 11000) return false;
     throw error;

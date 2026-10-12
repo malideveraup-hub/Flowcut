@@ -123,3 +123,15 @@ export function markMyNotificationRead(notificationId) {
 export function markAllMyNotificationsRead() {
   return apiRequest('/api/notifications/read-all', { method: 'PATCH' });
 }
+
+export function fetchPushConfiguration() {
+  return apiRequest('/api/notifications/push-configuration');
+}
+
+export function saveMyPushSubscription(subscription) {
+  return apiRequest('/api/notifications/push-subscription', { method: 'PUT', body: subscription });
+}
+
+export function removeMyPushSubscription(endpoint) {
+  return apiRequest('/api/notifications/push-subscription', { method: 'DELETE', body: { endpoint } });
+}

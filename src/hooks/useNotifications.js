@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  fetchPushConfiguration,
   fetchMyNotifications,
   markAllMyNotificationsRead,
   markMyNotificationRead,
+  saveMyPushSubscription,
 } from '../api/shopApi';
 import {
   enableQueueBrowserAlerts,
   getBrowserAlertPermission,
+  requiresHomeScreenForPush,
   registerQueueAlertServiceWorker,
   showQueueBrowserAlert,
+  urlBase64ToUint8Array,
 } from './queueBrowserAlerts';
 
 const POLL_INTERVAL_MS = 15_000;
@@ -30,17 +34,84 @@ export function useNotifications(enabled = true) {
   const [browserAlertSoundEnabled, setBrowserAlertSoundEnabled] = useState(false);
   const [browserAlertBusy, setBrowserAlertBusy] = useState(false);
   const [browserAlertError, setBrowserAlertError] = useState('');
+  const [browserPushEnabled, setBrowserPushEnabled] = useState(false);
+  const [browserPushConfigured, setBrowserPushConfigured] = useState(null);
   const requestInFlight = useRef(false);
   const knownNotificationIds = useRef(null);
+  const pushConfiguration = useRef(null);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let active = true;
+
+    fetchPushConfiguration()
+      .then((configuration) => {
+        if (!active) return;
+        pushConfiguration.current = configuration;
+        setBrowserPushConfigured(configuration.enabled === true);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled || browserAlertPermission === 'unsupported') return undefined;
     void registerQueueAlertServiceWorker().catch(() => {});
 
-    const syncPermission = () => setBrowserAlertPermission(getBrowserAlertPermission());
+    const syncPermission = () => {
+      const permission = getBrowserAlertPermission();
+      setBrowserAlertPermission(permission);
+      if (permission !== 'granted') setBrowserPushEnabled(false);
+    };
     window.addEventListener('focus', syncPermission);
     return () => window.removeEventListener('focus', syncPermission);
   }, [enabled, browserAlertPermission]);
+
+  useEffect(() => {
+    if (!enabled || browserAlertPermission !== 'granted') return undefined;
+    let active = true;
+
+    async function syncExistingSubscription() {
+      try {
+        const configuration = pushConfiguration.current || await fetchPushConfiguration();
+        pushConfiguration.current = configuration;
+        setBrowserPushConfigured(configuration.enabled === true);
+        if (!configuration.enabled) return;
+
+        const registration = await registerQueueAlertServiceWorker();
+        const subscription = await registration.pushManager?.getSubscription();
+        if (!subscription) return;
+        await saveMyPushSubscription(subscription.toJSON());
+        if (active) setBrowserPushEnabled(true);
+      } catch {
+        // The in-page reminder still works if background push cannot sync.
+      }
+    }
+
+    void syncExistingSubscription();
+    return () => {
+      active = false;
+    };
+  }, [enabled, browserAlertPermission]);
+
+  useEffect(() => {
+    if (!enabled || !('serviceWorker' in navigator)) return undefined;
+
+    function handlePushMessage(event) {
+      if (event.data?.type !== 'FLOWCUT_QUEUE_PUSH' || !event.data.notification) return;
+      const responsePort = event.ports?.[0];
+      void showQueueBrowserAlert(event.data.notification, { showSystemNotification: false })
+        .then((soundPlayed) => responsePort?.postMessage({ soundPlayed }))
+        .catch(() => responsePort?.postMessage({ soundPlayed: false }))
+        .finally(() => responsePort?.close());
+    }
+
+    navigator.serviceWorker.addEventListener('message', handlePushMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handlePushMessage);
+  }, [enabled]);
 
   const refresh = useCallback(async () => {
     if (!enabled || requestInFlight.current) return;
@@ -58,7 +129,7 @@ export function useNotifications(enabled = true) {
       queueAlerts.sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
       for (const item of queueAlerts) {
         try {
-          await showQueueBrowserAlert(item);
+          await showQueueBrowserAlert(item, { showSystemNotification: !browserPushEnabled });
         } catch {
           // The in-app notification remains available if Chrome alerts are blocked.
         }
@@ -70,7 +141,7 @@ export function useNotifications(enabled = true) {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, browserPushEnabled]);
 
   const enableBrowserAlerts = useCallback(async () => {
     setBrowserAlertBusy(true);
@@ -81,6 +152,36 @@ export function useNotifications(enabled = true) {
       setBrowserAlertSoundEnabled(result.soundEnabled);
       setBrowserAlertError(result.registrationError);
 
+      if (result.registrationAvailable && result.permission === 'granted') {
+        let configuration = pushConfiguration.current;
+        if (!configuration) {
+          configuration = await fetchPushConfiguration();
+          pushConfiguration.current = configuration;
+          setBrowserPushConfigured(configuration.enabled === true);
+        }
+
+        if (!configuration.enabled || !configuration.publicKey) {
+          throw new Error('Closed-browser alerts are not configured on this server yet. Page sound and alerts work while FlowCut is open.');
+        }
+
+        const registration = await registerQueueAlertServiceWorker();
+        if (!registration.pushManager) {
+          throw new Error('This browser does not support background push alerts. Page sound works while FlowCut is open.');
+        }
+
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(configuration.publicKey),
+          });
+        }
+        await saveMyPushSubscription(subscription.toJSON());
+        setBrowserPushEnabled(true);
+        setBrowserPushConfigured(true);
+        setBrowserAlertError('');
+      }
+
       if ((result.permission === 'granted' || result.soundEnabled) && !requestInFlight.current) {
         requestInFlight.current = true;
         try {
@@ -90,7 +191,7 @@ export function useNotifications(enabled = true) {
           setNotifications(currentNotifications);
           setUnreadCount(current.unreadCount || 0);
           for (const item of recentQueueAlerts(currentNotifications)) {
-            await showQueueBrowserAlert(item);
+            await showQueueBrowserAlert(item, { showSystemNotification: !browserPushEnabled });
           }
         } catch {
           // Enabling alerts should succeed even if the notification list is temporarily unavailable.
@@ -104,7 +205,7 @@ export function useNotifications(enabled = true) {
     } finally {
       setBrowserAlertBusy(false);
     }
-  }, []);
+  }, [browserPushEnabled]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -158,6 +259,9 @@ export function useNotifications(enabled = true) {
     browserAlertSoundEnabled,
     browserAlertBusy,
     browserAlertError,
+    browserPushEnabled,
+    browserPushConfigured,
+    browserPushNeedsHomeScreen: requiresHomeScreenForPush(),
     enableBrowserAlerts,
   };
 }

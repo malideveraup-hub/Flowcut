@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { User, QueueEntry, Barber } from '../models/index.js';
+import { User, QueueEntry, Barber, PushSubscription } from '../models/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { signToken } from '../utils/tokens.js';
 import {
@@ -379,6 +379,7 @@ export async function deleteOwnAccount(userId) {
     { customerId: userId, status: { $in: ACTIVE_QUEUE_STATUSES } },
     { $set: { status: 'CANCELLED' } }
   );
+  await PushSubscription.deleteMany({ userId });
 
   if (user.role === 'barber') {
     await Barber.updateMany({ userId }, { $set: { status: 'INACTIVE', availability: 'OFFLINE' } });
