@@ -23,6 +23,7 @@ import MyQueue from '../features/customer/MyQueue';
 import RecommendedTime from '../features/customer/RecommendedTime';
 import Profile from '../features/customer/Profile';
 import Notifications from '../features/customer/Notifications';
+import WebsiteGuide from '../features/customer/WebsiteGuide';
 
 import BarberLayout from '../features/barber/BarberLayout';
 import BarberHome from '../features/barber/BarberHome';
@@ -43,6 +44,7 @@ import UserManagement from '../features/super-admin/UserManagement';
 import PlatformAnalytics from '../features/super-admin/PlatformAnalytics';
 import PlatformSettings from '../features/super-admin/PlatformSettings';
 import SuperAdminQRCodeManagement from '../features/super-admin/SuperAdminQRCodeManagement';
+import AdminMapImages from '../features/shop-admin/AdminMapImages';
 
 const SHOP_ADMIN_NAV = [
   { to: '/admin', label: 'Dashboard', end: true },
@@ -51,6 +53,7 @@ const SHOP_ADMIN_NAV = [
   { to: '/admin/services', label: 'Services' },
   { to: '/admin/qr', label: 'QR code' },
   { to: '/admin/analytics', label: 'Analytics' },
+  { to: '/admin/map-images', label: 'Map images' },
   { to: '/admin/settings', label: 'Settings' },
 ];
 
@@ -86,6 +89,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Landing /> },
       { path: 'discover', element: <Discovery /> },
+      { path: 'guide', element: <WebsiteGuide /> },
       { path: 'scan', element: <ScanToJoin /> },
       { path: 'shops/:shopId', element: <ShopDetails /> },
       { path: 'shops/:shopId/queue', element: <PublicQueueView /> },
@@ -154,6 +158,7 @@ export const router = createBrowserRouter([
       { path: 'services', element: <ServiceManagement /> },
       { path: 'qr', element: <QRManagement /> },
       { path: 'analytics', element: <ShopAnalytics /> },
+      { path: 'map-images', element: <AdminMapImages /> },
       { path: 'settings', element: <ShopSettings /> },
     ],
   },

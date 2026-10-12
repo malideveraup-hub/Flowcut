@@ -13,6 +13,8 @@ export function toPublicShop(shop) {
     contactPhone: shop.contact?.phone || null,
     openingTime: shop.operatingHours?.openingTime || null,
     closingTime: shop.operatingHours?.closingTime || null,
+    rating: shop.rating ?? null,
+    ratingCount: shop.ratingCount || 0,
     // Deliberately excluded even though present on the document:
     // ownerId, status, createdAt/updatedAt, any future internal notes.
   };

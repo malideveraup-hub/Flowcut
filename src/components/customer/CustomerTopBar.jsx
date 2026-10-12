@@ -5,6 +5,7 @@ import styles from './CustomerTopBar.module.css';
 const NAV_ITEMS = [
   { to: '/', label: 'Home', end: true },
   { to: '/discover', label: 'Discover' },
+  { to: '/guide', label: 'Website Guide' },
   { to: '/my-queue', label: 'My Queue' },
   { to: '/profile', label: 'Profile' },
 ];

@@ -12,3 +12,5 @@ export { default as ServiceLog, ALLOWED_DELAY_MINUTES } from './ServiceLog.js';
 export { default as WaitingEstimate } from './WaitingEstimate.js';
 export { default as Notification, NOTIFICATION_TYPES, NOTIFICATION_CHANNELS } from './Notification.js';
 export { default as AuditLog, KNOWN_AUDIT_ACTIONS } from './AuditLog.js';
+export { default as MapImage, MAP_IMAGE_STATUSES } from './MapImage.js';
+export { default as ShopRating } from './ShopRating.js';

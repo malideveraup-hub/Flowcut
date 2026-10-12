@@ -23,6 +23,16 @@
   padding: 0;
 }
 
+.guideMain {
+  max-width: none;
+  padding: 0;
+}
+
+.publicQueueMain {
+  max-width: none;
+  padding: 0;
+}
+
 .profileMain {
   width: 100%;
   max-width: none;
@@ -53,6 +63,16 @@
   }
 
   .discoveryMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .guideMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .publicQueueMain {
     max-width: none;
     padding: 0;
   }

@@ -3,6 +3,7 @@ import express from 'express';
 import * as shopController from '../controllers/shopController.js';
 import * as serviceController from '../controllers/serviceController.js';
 import * as queueController from '../controllers/queueController.js';
+import * as shopRatingController from '../controllers/shopRatingController.js';
 import { requireAuth, requireRole, requireCurrentConsent } from '../middleware/authMiddleware.js';
 import { validateObjectIdParam } from '../utils/mongoId.js';
 
@@ -70,6 +71,21 @@ router.get(
   '/:shopId',
   validateObjectIdParam('shopId'),
   shopController.getPublicShop
+);
+router.get(
+  '/:shopId/rating',
+  validateObjectIdParam('shopId'),
+  requireAuth,
+  requireRole('customer'),
+  shopRatingController.getMyShopRating
+);
+router.put(
+  '/:shopId/rating',
+  validateObjectIdParam('shopId'),
+  requireAuth,
+  requireRole('customer'),
+  requireCurrentConsent,
+  shopRatingController.saveMyShopRating
 );
 router.get('/:shopId/services', validateObjectIdParam('shopId'), serviceController.listPublicServices);
 router.get('/:shopId/queue', validateObjectIdParam('shopId'), queueController.getPublicQueue);

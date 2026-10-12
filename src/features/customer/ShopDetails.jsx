@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync';
-import { fetchPublicShop, fetchPublicServices, fetchMyFavorites, addMyFavorite, removeMyFavorite } from '../../api/shopApi';
+import { fetchPublishedMapImages, fetchPublicShop, fetchPublicServices, fetchMyFavorites, fetchMyShopRating, submitShopRating, addMyFavorite, removeMyFavorite } from '../../api/shopApi';
+import { API_BASE } from '../../api/httpClient';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../components/ui/ToastContext';
 import EmptyState from '../../components/ui/EmptyState';
@@ -45,12 +46,23 @@ export default function ShopDetails() {
   const showToast = useToast();
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [failedCoverUrl, setFailedCoverUrl] = useState('');
+  const [ratingData, setRatingData] = useState(null);
+  const [ratingSaving, setRatingSaving] = useState(false);
+  const [ratingError, setRatingError] = useState('');
   const isCustomer = user?.role === 'customer';
+  const ratingKey = `${shopId}:${user?.id || ''}`;
+  const ratingLoading = isCustomer && ratingData?.key !== ratingKey;
+  const myRating = ratingData?.key === ratingKey ? ratingData.myRating : null;
+  const ratingSummary = ratingData?.key === ratingKey ? ratingData : null;
 
   const loadShop = useCallback(() => fetchPublicShop(shopId), [shopId]);
   const loadServices = useCallback(() => fetchPublicServices(shopId), [shopId]);
   const { data: shop, loading: shopLoading, error: shopError } = useAsync(loadShop, [shopId]);
   const { data: services, loading: servicesLoading } = useAsync(loadServices, [shopId]);
+  const { data: publishedImages } = useAsync(fetchPublishedMapImages);
+  const shopImage = publishedImages?.find((image) => image.shopId === shopId && image.imageUrl);
+  const hasShopCover = shopImage && failedCoverUrl !== shopImage.imageUrl;
 
   useEffect(() => {
     if (!isCustomer) return undefined;
@@ -62,6 +74,34 @@ export default function ShopDetails() {
     });
     return () => { active = false; };
   }, [isCustomer, shopId, user?.id]);
+
+  useEffect(() => {
+    if (!isCustomer) return undefined;
+    let active = true;
+    fetchMyShopRating(shopId).then((result) => {
+      if (!active) return;
+      setRatingData({ key: ratingKey, ...result });
+      setRatingError('');
+    }).catch((error) => {
+      if (active) setRatingError({ key: ratingKey, message: error.message || 'Your rating could not be loaded.' });
+    });
+    return () => { active = false; };
+  }, [isCustomer, ratingKey, shopId]);
+
+  async function rateShop(rating) {
+    setRatingSaving(true);
+    setRatingError(null);
+    try {
+      const result = await submitShopRating(shopId, rating);
+      setRatingData({ key: ratingKey, ...result });
+      setRatingError('');
+      showToast('Your shop rating has been saved');
+    } catch (error) {
+      setRatingError({ key: ratingKey, message: error.message || 'Your rating could not be saved.' });
+    } finally {
+      setRatingSaving(false);
+    }
+  }
 
   async function toggleFavorite() {
     setFavoriteLoading(true);
@@ -123,8 +163,10 @@ export default function ShopDetails() {
         <div className={styles.layout}>
           <div className={styles.mainCol}>
             <section className={styles.hero} aria-labelledby="shop-name">
-              <div className={styles.cover} aria-hidden="true">
-                <span className={styles.coverMark}><Icon name="barber" /></span>
+              <div className={`${styles.cover} ${hasShopCover ? styles.coverWithImage : ''}`}>
+                {hasShopCover
+                  ? <img className={styles.coverImage} src={`${API_BASE}${shopImage.imageUrl}`} alt="" onError={() => setFailedCoverUrl(shopImage.imageUrl)} />
+                  : <span className={styles.coverMark} aria-hidden="true"><Icon name="barber" /></span>}
               </div>
               <div className={styles.heroBody}>
                 <div className={styles.head}>
@@ -150,6 +192,42 @@ export default function ShopDetails() {
                   <span className={styles.chip}><Icon name="location" />{shop.address || 'Address unavailable'}</span>
                   <span className={styles.chip}><Icon name="clock" />{hours}</span>
                   {shop.contactPhone && <span className={styles.chip}>{shop.contactPhone}</span>}
+                </div>
+                <div className={styles.ratingPanel}>
+                  <div className={styles.ratingHeading}>
+                    <strong>Customer rating</strong>
+                    <span>
+                      {ratingSummary?.rating ?? shop.rating ?? 'No ratings yet'}
+                      {(ratingSummary?.rating ?? shop.rating) != null && ' ★'}
+                      {(ratingSummary?.ratingCount ?? shop.ratingCount ?? 0) > 0 && ` · ${ratingSummary?.ratingCount ?? shop.ratingCount} ratings`}
+                    </span>
+                  </div>
+                  {isCustomer && !authLoading ? (
+                    <div className={styles.ratingActions}>
+                      <div className={styles.ratingStars} role="group" aria-label="Rate this shop from 1 to 5 stars">
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            aria-label={`${value} star${value === 1 ? '' : 's'}`}
+                            aria-pressed={myRating === value}
+                            disabled={ratingSaving || ratingLoading}
+                            onClick={() => rateShop(value)}
+                          >
+                            {value <= (myRating || 0) ? '★' : '☆'}
+                          </button>
+                        ))}
+                      </div>
+                      <span>{ratingLoading ? 'Loading your rating…' : myRating ? `Your rating: ${myRating}/5` : 'Tap a star to rate'}</span>
+                    </div>
+                  ) : authLoading ? (
+                    <span className={styles.ratingHint}>Loading account…</span>
+                  ) : (
+                    <span className={styles.ratingHint}>
+                      Registered customers can rate this shop. <Link to="/login">Sign in</Link> or <Link to="/register">create an account</Link>.
+                    </span>
+                  )}
+                  {ratingError?.key === ratingKey && <span className={styles.ratingError} role="alert">{ratingError.message}</span>}
                 </div>
               </div>
             </section>

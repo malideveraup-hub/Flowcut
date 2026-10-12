@@ -3,6 +3,7 @@ import { Shop, User, AuditLog, Barber, Service } from '../models/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { toPublicShop } from '../utils/publicSerializers.js';
 import { computeLiveWaitEstimate } from '../utils/waitEstimate.js';
+import { getShopRatingSummaries, getShopRatingSummary } from './shopRatingService.js';
 import {
   validateShopName,
   validateAddress,
@@ -335,13 +336,21 @@ export async function getAdminShopApplicationDocument(shopId, key) {
 
 export async function getPublicShops() {
   const shops = await Shop.find({ status: 'APPROVED' }).sort({ name: 1 });
+  const ratingSummaries = await getShopRatingSummaries(shops.map((shop) => shop._id));
   const withEstimates = await Promise.all(
     shops.map(async (shop) => {
       const [wait, activeBarbers] = await Promise.all([
         computeLiveWaitEstimate(shop._id),
         Barber.countDocuments({ shopId: shop._id, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'BUSY'] } }),
       ]);
-      return { ...toPublicShop(shop), waitMin: wait.min, waitMax: wait.max, waiting: wait.waitingCount, activeBarbers };
+      return {
+        ...toPublicShop(shop),
+        ...ratingSummaries.get(String(shop._id)),
+        waitMin: wait.min,
+        waitMax: wait.max,
+        waiting: wait.waitingCount,
+        activeBarbers,
+      };
     })
   );
   return withEstimates;
@@ -355,11 +364,19 @@ export async function getPublicShops() {
 export async function getPublicShopById(shopId) {
   const shop = await Shop.findOne({ _id: shopId, status: 'APPROVED' });
   if (!shop) return null;
-  const [wait, activeBarbers] = await Promise.all([
+  const [wait, activeBarbers, ratingSummary] = await Promise.all([
     computeLiveWaitEstimate(shop._id),
     Barber.countDocuments({ shopId: shop._id, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'BUSY'] } }),
+    getShopRatingSummary(shop._id),
   ]);
-  return { ...toPublicShop(shop), waitMin: wait.min, waitMax: wait.max, waiting: wait.waitingCount, activeBarbers };
+  return {
+    ...toPublicShop(shop),
+    ...ratingSummary,
+    waitMin: wait.min,
+    waitMax: wait.max,
+    waiting: wait.waitingCount,
+    activeBarbers,
+  };
 }
 
 export async function getMyFavoriteShops(userId) {
@@ -385,6 +402,7 @@ export async function getMyFavoriteShops(userId) {
     barberCounts.set(key, (barberCounts.get(key) || 0) + 1);
   }
   const shopsById = new Map(shops.map((shop) => [String(shop._id), shop]));
+  const ratingSummaries = await getShopRatingSummaries(shopIds);
 
   const favorites = await Promise.all(favoriteIds.map(async (favoriteId) => {
     const shop = shopsById.get(String(favoriteId));
@@ -392,11 +410,11 @@ export async function getMyFavoriteShops(userId) {
     const wait = await computeLiveWaitEstimate(shop._id);
     return {
       ...toPublicShop(shop),
+      ...ratingSummaries.get(String(shop._id)),
       serviceName: serviceByShop.get(String(shop._id)) || null,
       waitMinutes: wait.waitingCount === 0 ? 0 : wait.min,
       waitingCount: wait.waitingCount,
       activeBarbers: barberCounts.get(String(shop._id)) || 0,
-      rating: null,
       distanceMiles: null,
     };
   }));

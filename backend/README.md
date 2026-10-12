@@ -124,6 +124,37 @@ backend/
 
 ---
 
+## Shop Admin map images
+
+Shop Admins can upload JPG, PNG, and WebP images (up to 5 MB) from
+`/admin/map-images`. Files are stored in MongoDB GridFS in the
+`map_images` bucket; metadata is stored in the `map_images` collection.
+Each upload is associated server-side with the authenticated Shop Admin's
+own shop. Shop Admins can edit the photo title; this does not change the
+official shop account name. Published photos appear in that shop's Discover
+card, Shop Details cover, and as clickable map markers.
+No storage provider or new environment variables are required. The API
+creates the collection and indexes automatically when the backend starts.
+
+New uploads remain private drafts until published. The public
+`GET /api/map-images` endpoint returns published metadata only, and
+`GET /api/map-images/:imageId/image` serves published image files only.
+All `GET/POST/PATCH/DELETE /api/shop-admin/map-images...` management
+endpoints are protected by the existing database-backed authentication
+middleware and `shop_admin` role check. The discovery map polls the public feed every
+15 seconds so publish, unpublish, replace, and delete changes appear without
+a page reload. Image markers are positioned automatically; the upload form
+does not require map coordinates or a separate location.
+
+Registered customer accounts can submit one editable 1-5 star rating per
+approved shop. Public shop responses include the current average and rating
+count, which power Discover's rating filter and sort. The backend stores
+ratings in `shop_ratings`; Mongoose creates the unique shop/customer index
+from the model schema.
+
+The feature uses the existing backend setup and run steps above. Verify
+image validation and metadata with `npm test` from the `backend` directory.
+
 ## Phase 2 — Database Models
 
 This phase added the Mongoose schema/model layer only. **No routes,

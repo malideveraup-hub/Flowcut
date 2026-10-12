@@ -6,8 +6,20 @@ export function fetchPublicShops() {
   return apiRequest('/api/shops').then((d) => d.shops);
 }
 
+export function fetchPublishedMapImages() {
+  return apiRequest('/api/map-images').then((d) => d.images);
+}
+
 export function fetchPublicShop(shopId) {
   return apiRequest(`/api/shops/${shopId}`).then((d) => d.shop);
+}
+
+export function fetchMyShopRating(shopId) {
+  return apiRequest(`/api/shops/${shopId}/rating`);
+}
+
+export function submitShopRating(shopId, rating) {
+  return apiRequest(`/api/shops/${shopId}/rating`, { method: 'PUT', body: { rating } });
 }
 
 export function fetchPublicShopByQueueQr(token) {

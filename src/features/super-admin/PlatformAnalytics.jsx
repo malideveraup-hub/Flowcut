@@ -379,7 +379,7 @@ export default function PlatformAnalytics() {
       </section>
 
       <p className={styles.note}>
-        Live platform snapshot: {stats.shopsByStatus.APPROVED || 0} approved shops, {stats.shopsByStatus.PENDING || 0} pending applications, {stats.activeQueueEntries || 0} active queue entries, and {stats.usersByRole.customer || 0} customers. Revenue and duration use completed service logs; ratings are not currently stored.
+        Live platform snapshot: {stats.shopsByStatus.APPROVED || 0} approved shops, {stats.shopsByStatus.PENDING || 0} pending applications, {stats.activeQueueEntries || 0} active queue entries, and {stats.usersByRole.customer || 0} customers. Revenue and duration use completed service logs; shop ratings are shown on shop pages and are not part of this report.
       </p>
 
       {insightsOpen && (

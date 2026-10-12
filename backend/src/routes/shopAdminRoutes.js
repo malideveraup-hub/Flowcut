@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import express from 'express';
 import * as shopController from '../controllers/shopController.js';
 import * as serviceController from '../controllers/serviceController.js';
 import * as barberController from '../controllers/barberController.js';
 import * as queueController from '../controllers/queueController.js';
+import * as mapImageController from '../controllers/mapImageController.js';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import { validateObjectIdParam } from '../utils/mongoId.js';
 
@@ -13,6 +15,19 @@ const router = Router();
 // the DATABASE record) — never a shopId param/body value — which is the
 // actual multi-shop isolation guarantee (Section 3/13).
 router.use(requireAuth, requireRole('shop_admin'));
+
+router.get('/map-images', mapImageController.listAdminMapImages);
+router.post('/map-images', mapImageController.createMapImageDraft);
+router.get('/map-images/:imageId/image', mapImageController.validateMapImageId, mapImageController.getAdminMapImage);
+router.post(
+  '/map-images/:imageId/image',
+  mapImageController.validateMapImageId,
+  express.raw({ type: () => true, limit: '5mb' }),
+  mapImageController.replaceMapImageFile
+);
+router.patch('/map-images/:imageId', mapImageController.validateMapImageId, mapImageController.updateMapImage);
+router.patch('/map-images/:imageId/publication', mapImageController.validateMapImageId, mapImageController.setMapImagePublication);
+router.delete('/map-images/:imageId', mapImageController.validateMapImageId, mapImageController.deleteMapImage);
 
 router.get('/shop', shopController.getOwnShop);
 router.get('/dashboard-summary', shopController.getOwnShopDashboardSummary);

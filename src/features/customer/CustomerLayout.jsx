@@ -18,6 +18,8 @@ export default function CustomerLayout() {
         styles.main,
         location.pathname === '/' ? styles.landingMain : '',
         location.pathname === '/discover' ? styles.discoveryMain : '',
+        location.pathname === '/guide' ? styles.guideMain : '',
+        /^\/shops\/[^/]+\/queue$/.test(location.pathname) ? styles.publicQueueMain : '',
         location.pathname === '/profile' ? styles.profileMain : '',
         /^\/shops\/[^/]+$/.test(location.pathname) ? styles.shopDetailsMain : '',
         location.pathname.startsWith('/shops/') && location.pathname.endsWith('/join') ? styles.joinMain : '',

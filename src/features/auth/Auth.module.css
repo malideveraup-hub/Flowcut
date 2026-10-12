@@ -552,6 +552,54 @@
   color: #c4b5fd;
 }
 
+.forgotFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--login-line);
+  color: var(--login-muted);
+  font-size: 11px;
+}
+
+.forgotSuccess {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 14px;
+  border: 1px solid rgba(93, 202, 165, .2);
+  border-radius: 12px;
+  background: rgba(93, 202, 165, .07);
+  color: #d8f5e7;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.forgotSuccess p {
+  margin: 0;
+}
+
+.forgotSuccess strong {
+  overflow-wrap: anywhere;
+}
+
+.forgotSuccessIcon {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(93, 202, 165, .16);
+  color: #9fe4c4;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .submitButton,
 .createAccountButton {
   display: flex;

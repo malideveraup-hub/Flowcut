@@ -3,7 +3,7 @@
 // import), so there is exactly one place that knows the API base URL,
 // sends credentials, and normalizes error shapes across the whole app.
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 async function readError(response) {
   let json = null;

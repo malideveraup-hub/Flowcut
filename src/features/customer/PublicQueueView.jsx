@@ -2,9 +2,6 @@ import { useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync';
 import { fetchPublicShop, fetchPublicQueue } from '../../api/shopApi';
-import Button from '../../components/ui/Button';
-import StatusBadge from '../../components/ui/StatusBadge';
-import EmptyState from '../../components/ui/EmptyState';
 import Skeleton from '../../components/ui/Skeleton';
 import { QUEUE_STATUS_META } from '../../api/congestion';
 import styles from './PublicQueueView.module.css';
@@ -19,45 +16,86 @@ export default function PublicQueueView() {
   const { data: queue, loading: queueLoading, error } = useAsync(loadQueue, [shopId]);
 
   if (shopLoading || queueLoading) {
-    return <Skeleton height={200} />;
+    return <main className={styles.page}><div className={styles.content}><Skeleton height={240} /></div></main>;
   }
 
   if (!shop) {
-    return <EmptyState skin="pixel" title="Shop not found" body="This shop may no longer be listed." />;
+    return <main className={styles.page}><div className={styles.content}><div className={styles.loadState}><h1>Shop not found</h1><p>This shop may no longer be listed.</p></div></div></main>;
   }
 
   if (error) {
-    return <EmptyState skin="pixel" title="Couldn't load the queue" body={error.message} />;
+    return <main className={styles.page}><div className={styles.content}><div className={styles.loadState} role="alert"><h1>Couldn’t load the queue</h1><p>{error.message}</p></div></div></main>;
   }
 
   return (
-    <div>
-      <p className={styles.sectionLabel}>Public queue</p>
-      <h1 className={styles.name}>{shop.name}</h1>
-      <p className={styles.meta}>{queue.length} people in line right now</p>
-
-      {queue.length === 0 ? (
-        <EmptyState skin="pixel" title="No one waiting" body="This is a great time to visit." />
-      ) : (
-        <div className={styles.list}>
-          {queue.map((entry) => {
-            const meta = QUEUE_STATUS_META[entry.status] || { label: entry.status, level: 'moderate' };
-            return (
-              <div className={styles.row} key={entry.queuePosition}>
-                <div>
-                  <div className={styles.rowName}>{entry.displayName}</div>
-                  <div className={styles.rowService}>{entry.serviceName}</div>
-                </div>
-                <StatusBadge skin="pixel" level={meta.level} label={meta.label.toUpperCase()} />
-              </div>
-            );
-          })}
+    <main className={styles.page}>
+      <div className={styles.content}>
+        <div className={styles.breadcrumb}>
+          <button type="button" onClick={() => navigate(`/shops/${shopId}`)}>← Shop details</button>
+          <span aria-hidden="true">/</span>
+          <span>Public queue</span>
         </div>
-      )}
 
-      <Button skin="pixel" fullWidth onClick={() => navigate(`/shops/${shopId}/join`)}>
-        Join this queue
-      </Button>
-    </div>
+        <header className={styles.header}>
+          <div className={styles.shopMark} aria-hidden="true">{shop.name.trim().charAt(0).toUpperCase() || 'F'}</div>
+          <div className={styles.shopInfo}>
+            <p className={styles.eyebrow}>LIVE SHOP QUEUE</p>
+            <h1 className={styles.name}>{shop.name}</h1>
+            <p className={styles.address}>{shop.address || 'Shop address unavailable'}</p>
+          </div>
+          <div className={styles.queueCount} aria-live="polite">
+            <strong>{queue.length}</strong>
+            <span>{queue.length === 1 ? 'person waiting' : 'people waiting'}</span>
+          </div>
+        </header>
+
+        <section className={styles.queuePanel} aria-labelledby="queue-title">
+          <div className={styles.panelHeading}>
+            <div>
+              <p className={styles.panelEyebrow}>RIGHT NOW</p>
+              <h2 id="queue-title">Queue overview</h2>
+            </div>
+            <span className={styles.liveIndicator}><i aria-hidden="true" /> Live queue</span>
+          </div>
+
+          {queue.length === 0 ? (
+            <div className={styles.emptyQueue}>
+              <span className={styles.emptyIcon} aria-hidden="true">✓</span>
+              <h3>No one waiting</h3>
+              <p>This is a great time to visit or join the queue.</p>
+            </div>
+          ) : (
+            <ol className={styles.list} aria-label="People currently in the queue">
+              {queue.map((entry, index) => {
+                const meta = QUEUE_STATUS_META[entry.status] || { label: entry.status, level: 'moderate' };
+                return (
+                  <li className={styles.row} key={entry.queuePosition}>
+                    <span className={styles.position}>{String(index + 1).padStart(2, '0')}</span>
+                    <div className={styles.rowInfo}>
+                      <span className={styles.rowName}>{entry.displayName}</span>
+                      <span className={styles.rowService}>{entry.serviceName || 'Service not specified'}</span>
+                    </div>
+                    <span className={styles.statusBadge} data-level={meta.level}>{meta.label}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+
+          <div className={styles.joinCard}>
+            <div>
+              <h3>Ready to take your place?</h3>
+              <p>Choose a service and confirm when you’re ready to join.</p>
+            </div>
+            <button className={styles.joinButton} type="button" onClick={() => navigate(`/shops/${shopId}/join`)}>
+              Join this queue
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </section>
+
+        <p className={styles.privacyNote}>Public queue names are anonymized to protect customer privacy.</p>
+      </div>
+    </main>
   );
 }
