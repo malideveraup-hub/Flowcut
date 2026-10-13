@@ -13,15 +13,15 @@
 //
 // DELAYED and PAUSED are modeled as sub-states of an in-progress service
 // (Section 8: "IN_SERVICE -> DELAYED", "IN_SERVICE -> PAUSED/BREAK") that
-// can resume back to IN_SERVICE or go straight to COMPLETED — a barber
-// finishing up while technically "running behind" is still a normal
-// finish, not an error.
+// can resume back to IN_SERVICE or go straight to COMPLETED. A further
+// delay can be recorded while already delayed, and finishing while
+// running behind remains a normal completion.
 export const QUEUE_TRANSITIONS = {
   JOINED: ['WAITING', 'CANCELLED'],
   WAITING: ['CALLED', 'IN_SERVICE', 'SKIPPED', 'CANCELLED'],
   CALLED: ['IN_SERVICE', 'SKIPPED', 'CANCELLED'],
   IN_SERVICE: ['DELAYED', 'PAUSED', 'COMPLETED'],
-  DELAYED: ['IN_SERVICE', 'COMPLETED'],
+  DELAYED: ['IN_SERVICE', 'DELAYED', 'COMPLETED'],
   PAUSED: ['IN_SERVICE', 'COMPLETED'],
   COMPLETED: [],
   SKIPPED: ['WAITING', 'CANCELLED'],
@@ -40,7 +40,14 @@ export const ACTIVE_QUEUE_STATUSES = ['JOINED', 'WAITING', 'CALLED', 'IN_SERVICE
 // valid stored default (see ServiceLog/QueueEntry from Phase 2) meaning
 // "no delay recorded" — it is NOT a value a client can submit as an
 // action; there is nothing to "apply" if the delay is zero.
-export const ALLOWED_DELAY_MINUTES = [5, 10, 15];
+export const ALLOWED_DELAY_MINUTES = [3, 5, 10];
+
+export function validateRequestId(value) {
+  if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    return 'A valid request ID is required.';
+  }
+  return null;
+}
 
 export function validateDelayMinutes(value) {
   if (value === null || value === undefined || value === '') return 'Delay must be a number.';

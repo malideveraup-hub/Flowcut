@@ -80,6 +80,206 @@
   align-items: center;
 }
 
+.accountWrap {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.accountTrigger {
+  display: inline-flex;
+  height: 46px;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 10px 4px 5px;
+  border: 1px solid rgba(139, 92, 246, .75);
+  border-radius: 999px;
+  color: #cfc9e7;
+  background: #14111f;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, .1), inset 0 0 0 1px rgba(255, 255, 255, .025);
+  cursor: pointer;
+  transition: border-color .18s, background .18s, box-shadow .18s;
+}
+
+.accountTrigger:hover,
+.accountTrigger[aria-expanded='true'] {
+  border-color: #a78bfa;
+  background: #1a1629;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, .13);
+}
+
+.accountAvatar {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.accountChevron {
+  width: 13px;
+  height: 13px;
+  color: #b9b0d7;
+  transition: transform .18s;
+}
+
+.accountChevronOpen {
+  transform: rotate(180deg);
+}
+
+.accountDropdown {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 60;
+  width: min(280px, calc(100vw - 24px));
+  max-height: min(76vh, 560px);
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 17px;
+  color: #f0eef8;
+  background: #211e33;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, .48), 0 4px 12px rgba(0, 0, 0, .24);
+  overscroll-behavior: contain;
+}
+
+.accountUser {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 9px 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
+}
+
+.accountAvatarLarge {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+  font-size: 16px;
+}
+
+.accountIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.accountIdentity strong,
+.accountIdentity > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountIdentity strong {
+  color: #f2f0fa;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.accountIdentity > span {
+  color: #aaa4c2;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.accountGroup {
+  padding-top: 11px;
+}
+
+.accountHeading {
+  margin: 0 9px 5px;
+  color: #8f89a9;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.accountItem {
+  display: flex;
+  width: 100%;
+  min-height: 42px;
+  align-items: center;
+  gap: 11px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 9px;
+  color: #e7e4f1;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color .16s, background .16s;
+}
+
+.accountItem:hover {
+  color: #fff;
+  background: rgba(167, 139, 250, .1);
+}
+
+.accountItem > svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  color: #aaa4c8;
+}
+
+.accountCount {
+  display: inline-flex;
+  min-width: 22px;
+  height: 19px;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: #bcb6d2;
+  background: rgba(255, 255, 255, .09);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.accountLogout {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, .09);
+}
+
+.accountItem.logoutItem,
+.accountItem.logoutItem > svg {
+  color: #ff8f91;
+}
+
+.accountItem.logoutItem:hover {
+  color: #ffb0b1;
+  background: rgba(248, 113, 113, .09);
+}
+
+.accountTrigger:focus-visible,
+.accountItem:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+
 .notificationButton {
   position: relative;
   display: grid;
@@ -398,6 +598,85 @@
 
 @media (max-width: 380px) {
   .inner {
-    padding: 0 14px;
+    gap: 14px;
+    padding: 0 12px;
+  }
+
+  .actions {
+    gap: 7px;
+  }
+
+  .logo {
+    gap: 7px;
+    font-size: 18px;
+  }
+
+  .accountTrigger {
+    height: 40px;
+    gap: 5px;
+    padding: 3px 6px 3px 4px;
+  }
+
+  .accountTrigger .accountAvatar {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+
+  .accountChevron {
+    width: 11px;
+    height: 11px;
+  }
+
+  .notificationButton {
+    width: 36px;
+    height: 36px;
+  }
+
+  .menuButton {
+    width: 34px;
+    height: 36px;
+  }
+}
+
+@media (max-width: 320px) {
+  .inner {
+    gap: 10px;
+    padding: 0 8px;
+  }
+
+  .actions {
+    gap: 4px;
+  }
+
+  .logo {
+    gap: 6px;
+    font-size: 16px;
+  }
+
+  .logoMark {
+    width: 26px;
+    height: 26px;
+  }
+
+  .accountTrigger {
+    gap: 4px;
+    padding-right: 5px;
+  }
+
+  .accountTrigger .accountAvatar {
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+    font-size: 13px;
+  }
+
+  .notificationButton {
+    width: 34px;
+    height: 34px;
+  }
+
+  .menuButton {
+    width: 30px;
   }
 }

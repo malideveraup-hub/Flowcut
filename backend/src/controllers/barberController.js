@@ -45,9 +45,9 @@ export async function getMyDashboard(req, res, next) {
 
 export async function setMyAvailability(req, res, next) {
   try {
-    const { availability } = req.body || {};
-    const barber = await barberService.setOwnAvailability(req.user.id, req.user.shopId, availability);
-    res.json({ success: true, data: { barber } });
+    const { availability, requestId } = req.body || {};
+    const barber = await barberService.setOwnAvailability(req.user.id, req.user.shopId, availability, requestId);
+    res.json({ success: true, data: { barber: { id: barber._id.toString(), name: barber.name, availability: barber.availability } } });
   } catch (err) {
     next(err);
   }

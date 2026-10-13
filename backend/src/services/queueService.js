@@ -2,12 +2,13 @@ import { validateName } from '../validation/authValidation.js';
 import { QueueEntry, Service, ServiceLog, User } from '../models/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { isValidObjectId } from '../utils/mongoId.js';
-import { computeCustomerWaitEstimate, computeLiveWaitEstimate } from '../utils/waitEstimate.js';
+import { computeLiveWaitEstimate, computeQueueWaitEstimate } from '../utils/waitEstimate.js';
 import { toPublicQueueEntry, toStaffQueueEntry } from '../utils/publicSerializers.js';
-import { canTransition, ACTIVE_QUEUE_STATUSES, validateDelayMinutes } from '../validation/queueValidation.js';
+import { canTransition, ACTIVE_QUEUE_STATUSES, validateDelayMinutes, validateRequestId } from '../validation/queueValidation.js';
 import { expireCalledQueueEntry, notifyQueueEntry, reconcileShopQueue } from './queueNotificationService.js';
 import Shop from '../models/Shop.js';
 import Barber from '../models/Barber.js';
+import { DEFAULT_SERVICE_MINUTES } from '../config/queueConfig.js';
 
 async function requireActiveService(shopId, serviceId) {
   // serviceId arrives from the request BODY here (not a route :param, so
@@ -80,6 +81,7 @@ export async function getMyActiveQueueEntry(customerId) {
   }).sort({ createdAt: -1 });
 
   if (!entry) return null;
+  const serverNow = new Date();
 
   const [aheadCount, service, shop, barber, wait] = await Promise.all([
     QueueEntry.countDocuments({
@@ -92,19 +94,20 @@ export async function getMyActiveQueueEntry(customerId) {
     entry.barberId
       ? Barber.findOne({ _id: entry.barberId, shopId: entry.shopId }).select('name')
       : null,
-    computeCustomerWaitEstimate(entry.shopId, entry),
+    computeQueueWaitEstimate(entry.shopId, entry, serverNow),
   ]);
 
   return {
     id: entry._id.toString(),
     status: entry.status,
+    serverNow: serverNow.toISOString(),
     position: entry.queuePosition,
     aheadCount,
     serviceName: service?.name || null,
     shopName: shop?.name || null,
     barberName: barber?.name || null,
     shopId: entry.shopId.toString(),
-    wait: { min: wait.min, max: wait.max },
+    wait: { min: wait.min, max: wait.max, remainingMinutes: wait.remainingMinutes },
     arrivedAt: entry.arrivedAt || null,
     arrivalDeadlineAt: entry.arrivalDeadlineAt || null,
   };
@@ -369,6 +372,7 @@ export async function updateShopQueueEntry(shopId, entryId, fields = {}) {
       if (!isValidObjectId(fields.barberId)) throw new AppError(400, 'Select a valid barber.');
       const barber = await Barber.findOne({ _id: fields.barberId, shopId, status: 'ACTIVE' });
       if (!barber) throw new AppError(400, 'Select an active barber from this shop.');
+      if (barber.availability === 'ON_BREAK') throw new AppError(409, 'A barber on break cannot receive a new assignment.');
       if (['IN_SERVICE', 'DELAYED', 'PAUSED'].includes(entry.status)) {
         const alreadyServing = await QueueEntry.findOne({
           shopId,
@@ -533,8 +537,38 @@ export async function cancelEntryByStaff(shopId, entryId) {
 // target entry belongs to that same shop before touching it.
 // ---------------------------------------------------------------------
 
-export async function startService(shopId, barberId, entryId) {
+function requireRequestId(requestId) {
+  const error = validateRequestId(requestId);
+  if (error) throw new AppError(400, error);
+}
+
+function findActionReceipt(entry, requestId, action, minutes) {
+  const receipt = entry.actionReceipts?.find((item) => item.requestId === requestId);
+  if (receipt && (receipt.action !== action || (minutes !== undefined && receipt.minutes !== minutes))) {
+    throw new AppError(409, 'This request ID was already used for a different action.');
+  }
+  return receipt;
+}
+
+function receiptUpdate(requestId, action, minutes = null) {
+  return {
+    $push: {
+      actionReceipts: {
+        $each: [{ requestId, action, minutes, createdAt: new Date() }],
+        $slice: -50,
+      },
+    },
+  };
+}
+
+export async function startService(shopId, barberId, entryId, requestId) {
+  requireRequestId(requestId);
   const entry = await requireShopQueueEntry(shopId, entryId);
+  const priorReceipt = findActionReceipt(entry, requestId, 'start');
+  if (priorReceipt) return entry;
+  if (entry.barberId && String(entry.barberId) !== String(barberId)) {
+    throw new AppError(403, 'This customer is assigned to another barber.');
+  }
   const startedAt = new Date();
   if (entry.status === 'CALLED' && !entry.arrivedAt && entry.arrivalDeadlineAt && entry.arrivalDeadlineAt <= startedAt) {
     const expired = await expireCalledQueueEntry(entry._id, startedAt);
@@ -545,6 +579,17 @@ export async function startService(shopId, barberId, entryId) {
     throw new AppError(409, `Can't start service from status ${entry.status}.`);
   }
 
+  const nextEligible = await QueueEntry.findOne({
+    shopId,
+    barberId: { $in: [null, barberId] },
+    status: { $in: ['WAITING', 'CALLED'] },
+  }).sort({ queuePosition: 1, createdAt: 1 });
+  if (!nextEligible || String(nextEligible._id) !== String(entry._id)) {
+    throw new AppError(409, 'This is no longer the next customer for your queue. Refresh the workspace.');
+  }
+  const service = await Service.findOne({ _id: entry.serviceId, shopId }).select('estimatedDuration');
+  const baseMinutes = service?.estimatedDuration || DEFAULT_SERVICE_MINUTES;
+
   const alreadyServing = await QueueEntry.findOne({
     barberId,
     status: { $in: ['IN_SERVICE', 'DELAYED', 'PAUSED'] },
@@ -554,26 +599,84 @@ export async function startService(shopId, barberId, entryId) {
     throw new AppError(409, 'This barber already has an active service.');
   }
 
-  let serviceLog = await ServiceLog.findOne({ queueEntryId: entry._id });
-  if (!serviceLog) {
-    serviceLog = new ServiceLog({
-      queueEntryId: entry._id,
-      barberId,
-      serviceId: entry.serviceId,
-      startTime: startedAt,
-    });
-  } else {
+  // Reserve the barber atomically before claiming the queue entry. This
+  // makes both the break/start race and simultaneous starts safe.
+  const barberBeforeStart = await Barber.findOneAndUpdate(
+    { _id: barberId, shopId, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'OFFLINE'] } },
+    { $set: { availability: 'BUSY' } },
+    { new: false }
+  );
+  if (!barberBeforeStart) {
+    const latestEntry = await QueueEntry.findById(entry._id);
+    const receipt = latestEntry && findActionReceipt(latestEntry, requestId, 'start');
+    if (receipt) return latestEntry;
+    const barber = await Barber.findOne({ _id: barberId, shopId });
+    if (!barber || barber.status !== 'ACTIVE') throw new AppError(403, 'Your barber profile is not active.');
+    if (barber.availability === 'ON_BREAK') throw new AppError(409, 'End your break before starting a service.');
+    throw new AppError(409, 'You already have an active service.');
+  }
+  const releaseBarber = () => Barber.findOneAndUpdate(
+    { _id: barberId, shopId, availability: 'BUSY' },
+    { $set: { availability: barberBeforeStart.availability } }
+  );
+
+  const claimFilter = {
+    _id: entry._id,
+    shopId,
+    status: entry.status,
+    queuePosition: entry.queuePosition,
+    barberId: { $in: [null, barberId] },
+    'actionReceipts.requestId': { $ne: requestId },
+  };
+  if (entry.status === 'CALLED' && !entry.arrivedAt && entry.arrivalDeadlineAt) {
+    claimFilter.arrivalDeadlineAt = { $gt: startedAt };
+  }
+  let claimedEntry;
+  try {
+    claimedEntry = await QueueEntry.findOneAndUpdate(
+      claimFilter,
+      {
+        $set: {
+          status: 'IN_SERVICE',
+          barberId,
+          arrivedAt: entry.arrivedAt || startedAt,
+          baseMinutes,
+          delayMinutes: 0,
+        },
+        ...receiptUpdate(requestId, 'start'),
+      },
+      { new: true }
+    );
+  } catch (err) {
+    await releaseBarber();
+    throw err;
+  }
+  if (!claimedEntry) {
+    await releaseBarber();
+    throw new AppError(409, 'This customer is no longer eligible to start service. Refresh the queue and try again.');
+  }
+
+  try {
+    let serviceLog = await ServiceLog.findOne({ queueEntryId: entry._id });
+    if (!serviceLog) {
+      serviceLog = new ServiceLog({ queueEntryId: entry._id, barberId, serviceId: entry.serviceId });
+    }
     serviceLog.barberId = barberId;
     serviceLog.serviceId = entry.serviceId;
-    serviceLog.startTime ||= startedAt;
+    serviceLog.startTime = startedAt;
+    serviceLog.endTime = null;
+    serviceLog.actualDuration = null;
+    await serviceLog.save();
+  } catch (err) {
+    await QueueEntry.findOneAndUpdate(
+      { _id: claimedEntry._id, shopId, barberId, status: 'IN_SERVICE', updatedAt: claimedEntry.updatedAt },
+      { $set: { status: entry.status, barberId: entry.barberId || null, arrivedAt: entry.arrivedAt || null }, $pull: { actionReceipts: { requestId } } }
+    );
+    await releaseBarber();
+    throw err;
   }
-  await serviceLog.save();
 
-  entry.status = 'IN_SERVICE';
-  entry.barberId = barberId;
-  entry.arrivedAt ||= startedAt;
-  await entry.save();
-  await notifyQueueEntry(entry, {
+  await notifyQueueEntry(claimedEntry, {
     eventKey: `${entry._id}:service-started`,
     type: 'SERVICE_STARTED',
     title: 'Your service has started',
@@ -581,7 +684,7 @@ export async function startService(shopId, barberId, entryId) {
     position: entry.queuePosition,
   });
   await reconcileShopQueue(shopId, { now: startedAt });
-  return entry;
+  return claimedEntry;
 }
 
 function requireAssignedBarber(entry, barberId) {
@@ -590,54 +693,104 @@ function requireAssignedBarber(entry, barberId) {
   }
 }
 
-export async function finishService(shopId, barberId, entryId) {
+export async function finishService(shopId, barberId, entryId, requestId) {
+  requireRequestId(requestId);
   const entry = await requireShopQueueEntry(shopId, entryId);
+  const priorReceipt = findActionReceipt(entry, requestId, 'finish');
+  if (priorReceipt) return { entry, actualMinutes: priorReceipt.minutes, replayed: true };
   requireAssignedBarber(entry, barberId);
   if (!canTransition(entry.status, 'COMPLETED')) {
     throw new AppError(409, 'This service was never started, so it cannot be finished.');
   }
 
   const finishedAt = new Date();
-  let serviceLog = await ServiceLog.findOne({ queueEntryId: entry._id });
-  if (!serviceLog) {
-    serviceLog = new ServiceLog({
-      queueEntryId: entry._id,
-      barberId,
-      serviceId: entry.serviceId,
-      endTime: finishedAt,
-    });
-  } else {
-    serviceLog.endTime = finishedAt;
-    serviceLog.actualDuration = serviceLog.startTime
-      ? Math.max(0, (finishedAt - serviceLog.startTime) / 60000)
-      : null;
+  const previousStatus = entry.status;
+  const serviceLog = await ServiceLog.findOne({ queueEntryId: entry._id });
+  if (!serviceLog?.startTime) {
+    throw new AppError(409, 'The service start time is unavailable. Refresh the workspace and try again.');
   }
-  await serviceLog.save();
+  const actualMinutes = Math.max(0, (finishedAt - serviceLog.startTime) / 60000);
+  const completedEntry = await QueueEntry.findOneAndUpdate(
+    {
+      _id: entry._id,
+      shopId,
+      barberId,
+      status: previousStatus,
+      'actionReceipts.requestId': { $ne: requestId },
+    },
+    {
+      $set: { status: 'COMPLETED' },
+      ...receiptUpdate(requestId, 'finish', Math.round(actualMinutes)),
+    },
+    { new: true }
+  );
+  if (!completedEntry) {
+    const latest = await QueueEntry.findById(entry._id);
+    const receipt = latest && findActionReceipt(latest, requestId, 'finish');
+    if (receipt) return { entry: latest, actualMinutes: receipt.minutes, replayed: true };
+    throw new AppError(409, 'This service has already changed. Refresh the workspace and try again.');
+  }
 
-  entry.status = 'COMPLETED';
-  await entry.save();
+  try {
+    serviceLog.endTime = finishedAt;
+    serviceLog.actualDuration = actualMinutes;
+    serviceLog.delayMinutes = entry.delayMinutes || 0;
+    await serviceLog.save();
+  } catch (err) {
+    await QueueEntry.findOneAndUpdate(
+      { _id: completedEntry._id, shopId, barberId, status: 'COMPLETED', updatedAt: completedEntry.updatedAt },
+      { $set: { status: previousStatus }, $pull: { actionReceipts: { requestId } } }
+    );
+    throw err;
+  }
+
+  await Barber.findOneAndUpdate(
+    { _id: barberId, shopId, availability: 'BUSY' },
+    { $set: { availability: 'AVAILABLE' } }
+  );
   await reconcileShopQueue(shopId, {
     callNextCount: 1,
     now: finishedAt,
     nextCustomerReason: 'SERVICE_COMPLETED',
   });
-  return entry;
+  return { entry: completedEntry, actualMinutes: Math.round(actualMinutes), replayed: false };
 }
 
-export async function applyDelay(shopId, barberId, entryId, minutes) {
+export async function applyDelay(shopId, barberId, entryId, minutes, requestId) {
+  requireRequestId(requestId);
   const delayErr = validateDelayMinutes(minutes);
   if (delayErr) throw new AppError(400, delayErr);
 
   const entry = await requireShopQueueEntry(shopId, entryId);
+  const priorReceipt = findActionReceipt(entry, requestId, 'extend', Number(minutes));
+  if (priorReceipt) return { entry, minutes: priorReceipt.minutes, replayed: true };
   requireAssignedBarber(entry, barberId);
   if (!canTransition(entry.status, 'DELAYED')) {
     throw new AppError(409, 'Delays can only be applied to a service in progress.');
   }
 
-  entry.status = 'DELAYED';
-  entry.delayMinutes = (entry.delayMinutes || 0) + Number(minutes);
-  await entry.save();
-  return entry;
+  const delayedEntry = await QueueEntry.findOneAndUpdate(
+    {
+      _id: entry._id,
+      shopId,
+      barberId,
+      status: { $in: ['IN_SERVICE', 'DELAYED'] },
+      'actionReceipts.requestId': { $ne: requestId },
+    },
+    {
+      $set: { status: 'DELAYED' },
+      $inc: { delayMinutes: Number(minutes) },
+      ...receiptUpdate(requestId, 'extend', Number(minutes)),
+    },
+    { new: true }
+  );
+  if (!delayedEntry) {
+    const latest = await QueueEntry.findById(entry._id);
+    const receipt = latest && findActionReceipt(latest, requestId, 'extend', Number(minutes));
+    if (receipt) return { entry: latest, minutes: receipt.minutes, replayed: true };
+    throw new AppError(409, 'This service has already changed. Refresh the workspace and try again.');
+  }
+  return { entry: delayedEntry, minutes: Number(minutes), replayed: false };
 }
 
 /**
@@ -646,37 +799,57 @@ export async function applyDelay(shopId, barberId, entryId, minutes) {
  * the AUTHENTICATED barber's own — see barberController.js.
  */
 export async function getBarberDashboard(shopId, barberId) {
-  const [barber, current, upNext] = await Promise.all([
-    Barber.findById(barberId),
+  const serverNow = new Date();
+  const [barber, shop, current, upNext] = await Promise.all([
+    Barber.findOne({ _id: barberId, shopId }),
+    Shop.findById(shopId).select('name'),
     QueueEntry.findOne({ shopId, barberId, status: { $in: ['IN_SERVICE', 'DELAYED', 'PAUSED'] } }),
-    QueueEntry.find({ shopId, status: 'WAITING' }).sort({ createdAt: 1 }),
+    QueueEntry.find({
+      shopId,
+      status: { $in: ['CALLED', 'WAITING'] },
+      barberId: { $in: [null, barberId] },
+    }).sort({ queuePosition: 1, createdAt: 1 }),
   ]);
 
   const serviceIds = [...new Set([current?.serviceId, ...upNext.map((e) => e.serviceId)].filter(Boolean))];
   const customerIds = [...new Set([current?.customerId, ...upNext.map((e) => e.customerId)].filter(Boolean))];
-  const [services, customers] = await Promise.all([
-    Service.find({ _id: { $in: serviceIds } }).select('name'),
+  const [services, customers, serviceLog] = await Promise.all([
+    Service.find({ _id: { $in: serviceIds } }).select('name estimatedDuration'),
     User.find({ _id: { $in: customerIds } }).select('name'),
+    current ? ServiceLog.findOne({ queueEntryId: current._id }).select('startTime delayMinutes') : null,
   ]);
   const serviceNameById = new Map(services.map((s) => [String(s._id), s.name]));
+  const serviceById = new Map(services.map((s) => [String(s._id), s]));
   const customerNameById = new Map(customers.map((c) => [String(c._id), c.name]));
 
-  function shape(entry) {
+  function shape(entry, isCurrent = false) {
     if (!entry) return null;
+    const baseMinutes = entry.baseMinutes || serviceById.get(String(entry.serviceId))?.estimatedDuration || DEFAULT_SERVICE_MINUTES;
     return {
       id: entry._id.toString(),
       status: entry.status,
       customerName: entry.customerId ? customerNameById.get(String(entry.customerId)) : entry.walkInName,
       serviceName: serviceNameById.get(String(entry.serviceId)) || null,
+      estimatedDuration: baseMinutes,
+      baseMinutes,
+      extraMinutes: entry.delayMinutes || 0,
       source: entry.source,
-      startedAt: entry.updatedAt, // best-effort until Phase 5's real ServiceLog.startTime exists
+      queuePosition: entry.queuePosition,
+      startedAt: isCurrent ? serviceLog?.startTime || null : null,
       delayMinutes: entry.delayMinutes || 0,
     };
   }
 
+  const nextEntries = await Promise.all(upNext.map(async (entry) => ({
+    ...shape(entry),
+    wait: await computeQueueWaitEstimate(shopId, entry, serverNow),
+  })));
+
   return {
     barber: barber ? { id: barber._id.toString(), name: barber.name, availability: barber.availability } : null,
-    current: shape(current),
-    upNext: upNext.map(shape),
+    shopName: shop?.name || null,
+    serverNow: serverNow.toISOString(),
+    current: shape(current, true),
+    upNext: nextEntries,
   };
 }

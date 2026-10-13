@@ -27,6 +27,14 @@
   color: var(--customer-cream);
 }
 
+.dialog.barber {
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 20px;
+  background: #211e33;
+  color: #f3f1fb;
+  box-shadow: 0 24px 70px rgba(5, 4, 12, .48);
+}
+
 .title {
   font-size: var(--text-heading);
   font-weight: 600;

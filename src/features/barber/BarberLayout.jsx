@@ -9,25 +9,32 @@ export default function BarberLayout() {
   const { name, logout } = useAuth();
   const [logoutOpen, setLogoutOpen] = useState(false);
 
-  function handleLogout() {
+  async function handleLogout() {
     setLogoutOpen(false);
-    logout();
+    await logout();
   }
 
   return (
     <div className={styles.shell}>
       <header className={styles.topbar}>
-        <span className={styles.brand}>FlowCut</span>
+        <div className={styles.topbarInner}>
+          <span className={styles.brand}>
+            <span className={styles.mark} aria-hidden="true" />
+            FLOWCUT
+          </span>
 
-        <div className={styles.who}>
-          <span>{name}</span>
+          <div className={styles.who}>
+            <span className={styles.avatar} aria-hidden="true">{name?.charAt(0)?.toUpperCase() || 'B'}</span>
+            <span className={styles.name}>{name || 'Barber'}</span>
 
-          <button
-            className={styles.logout}
-            onClick={() => setLogoutOpen(true)}
-          >
-            Log out
-          </button>
+            <button
+              className={styles.logout}
+              type="button"
+              onClick={() => setLogoutOpen(true)}
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -37,24 +44,16 @@ export default function BarberLayout() {
 
       {/* LOG OUT MODAL */}
       <Modal
-        skin="pixel"
+        skin="clean"
         open={logoutOpen}
         onClose={() => setLogoutOpen(false)}
         title="Log out?"
       >
-        <p style={{ marginBottom: 12 }}>
-          Are you sure you want to log out?
-        </p>
+        <p className={styles.logoutCopy}>Are you sure you want to log out?</p>
 
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            marginTop: 12,
-          }}
-        >
+        <div className={styles.logoutActions}>
           <Button
-            skin="pixel"
+            skin="clean"
             variant="secondary"
             onClick={() => setLogoutOpen(false)}
           >
@@ -62,7 +61,7 @@ export default function BarberLayout() {
           </Button>
 
           <Button
-            skin="pixel"
+            skin="clean"
             variant="destructive"
             onClick={handleLogout}
           >

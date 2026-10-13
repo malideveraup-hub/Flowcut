@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { deleteAccountRequest, updateProfileRequest } from '../../api/authApi';
 import {
@@ -211,8 +211,10 @@ function ProfileSettings({ user, onSave, onLogout, onDeleteAccount, shopApplicat
 
 export default function Profile() {
   const { user, setUser, logout } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(() => ['history', 'favorites', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'history');
+  const selectedTab = location.hash.slice(1);
+  const activeTab = ['history', 'favorites', 'settings'].includes(selectedTab) ? selectedTab : 'history';
   const [shopApplication, setShopApplication] = useState(null);
   const [history, setHistory] = useState({ items: [], total: 0, completedTotal: 0, page: 1, pageSize: 5 });
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -301,8 +303,7 @@ export default function Profile() {
   }
 
   function selectTab(tab) {
-    setActiveTab(tab);
-    window.history.replaceState(null, '', `#${tab}`);
+    navigate({ pathname: location.pathname, search: location.search, hash: `#${tab}` }, { replace: true });
   }
 
   async function handleSaveName(newName) {

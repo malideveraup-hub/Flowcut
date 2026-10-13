@@ -38,6 +38,17 @@ const barberSchema = new mongoose.Schema(
       enum: BARBER_AVAILABILITY,
       default: 'OFFLINE',
     },
+    // Availability requests are naturally repeatable, but storing recent
+    // request IDs lets a network retry replay the same barber action.
+    actionReceipts: {
+      type: [{
+        requestId: { type: String, required: true },
+        action: { type: String, required: true, enum: ['availability'] },
+        availability: { type: String, enum: BARBER_AVAILABILITY, required: true },
+        createdAt: { type: Date, default: Date.now },
+      }],
+      default: [],
+    },
   },
   { timestamps: true }
 );

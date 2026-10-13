@@ -82,6 +82,15 @@ const queueEntrySchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    // Frozen service estimate selected when the barber starts this entry.
+    // Future changes to the shop's service settings must not move an active
+    // customer's countdown.
+    baseMinutes: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: 480,
+    },
     // Phase 4 addition: accumulates minutes reported via the barber's
     // Delay action while this entry is being served. Deliberately lives
     // directly on QueueEntry rather than ServiceLog — full ServiceLog
@@ -93,6 +102,17 @@ const queueEntrySchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    // Keep a short replay window so a retried barber action with the same
+    // requestId cannot start, finish, or extend the queue entry twice.
+    actionReceipts: {
+      type: [{
+        requestId: { type: String, required: true },
+        action: { type: String, required: true, enum: ['start', 'finish', 'extend'] },
+        minutes: { type: Number, default: null },
+        createdAt: { type: Date, default: Date.now },
+      }],
+      default: [],
     },
     arrivalDeadlineAt: {
       type: Date,

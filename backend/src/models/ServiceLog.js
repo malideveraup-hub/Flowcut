@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 
-// Matches the delay options the Customer/Barber UI already exposes
-// (+5 / +10 / +15) plus 0 (no delay recorded).
-export const ALLOWED_DELAY_MINUTES = [0, 5, 10, 15];
+// Discrete extension controls plus 0; the stored delayMinutes field is a
+// cumulative total and may therefore be another value (for example 8).
+export const ALLOWED_DELAY_MINUTES = [0, 3, 5, 10];
 
 const serviceLogSchema = new mongoose.Schema(
   {
@@ -47,8 +47,9 @@ const serviceLogSchema = new mongoose.Schema(
 
     delayMinutes: {
       type: Number,
-      enum: ALLOWED_DELAY_MINUTES,
       default: 0,
+      min: 0,
+      max: 480,
     },
   },
   { timestamps: true }

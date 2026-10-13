@@ -155,8 +155,8 @@ export async function cancelEntryByStaff(req, res, next) {
 
 export async function startService(req, res, next) {
   try {
-    await queueService.startService(req.barber.shopId, req.barber.id, req.params.entryId);
-    res.json({ success: true, message: 'Service started.' });
+    const entry = await queueService.startService(req.barber.shopId, req.barber.id, req.params.entryId, req.body?.requestId);
+    res.json({ success: true, message: 'Service started.', data: { entryId: entry._id.toString() } });
   } catch (err) {
     next(err);
   }
@@ -164,8 +164,8 @@ export async function startService(req, res, next) {
 
 export async function finishService(req, res, next) {
   try {
-    await queueService.finishService(req.barber.shopId, req.barber.id, req.params.entryId);
-    res.json({ success: true, message: 'Service finished.' });
+    const result = await queueService.finishService(req.barber.shopId, req.barber.id, req.params.entryId, req.body?.requestId);
+    res.json({ success: true, message: 'Service finished.', data: { actualMinutes: result.actualMinutes } });
   } catch (err) {
     next(err);
   }
@@ -173,9 +173,9 @@ export async function finishService(req, res, next) {
 
 export async function applyDelay(req, res, next) {
   try {
-    const { minutes } = req.body || {};
-    await queueService.applyDelay(req.barber.shopId, req.barber.id, req.params.entryId, minutes);
-    res.json({ success: true, message: 'Delay recorded.' });
+    const { minutes, requestId } = req.body || {};
+    await queueService.applyDelay(req.barber.shopId, req.barber.id, req.params.entryId, minutes, requestId);
+    res.json({ success: true, message: 'Additional service time recorded.', data: { minutes } });
   } catch (err) {
     next(err);
   }

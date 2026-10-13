@@ -114,6 +114,12 @@
     linear-gradient(155deg, #211b38, #171522 76%);
 }
 
+.refreshNotice {
+  margin: 0 0 12px;
+  color: #fcd34d;
+  font-size: 13px;
+}
+
 .heroTop,
 .stats,
 .detailsHeading {

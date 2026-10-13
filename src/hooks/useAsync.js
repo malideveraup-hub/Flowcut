@@ -15,19 +15,29 @@ export function useAsync(loader, deps = []) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const requestIdRef = useRef(0);
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
-  const run = useCallback(async ({ quiet = false } = {}) => {
+  const run = useCallback(async ({ quiet = false, throwOnError = false } = {}) => {
+    const requestId = ++requestIdRef.current;
     if (!quiet) setLoading(true);
     setError(null);
     try {
       const result = await loaderRef.current();
-      setData(result);
+      if (requestId === requestIdRef.current) {
+        setData(result);
+        setError(null);
+        setUpdatedAt(new Date().toISOString());
+      }
+      return result;
     } catch (err) {
-      setError(err);
+      if (requestId === requestIdRef.current) setError(err);
+      if (throwOnError) throw err;
+      return null;
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
@@ -36,5 +46,5 @@ export function useAsync(loader, deps = []) {
     run();
   }, [run]);
 
-  return { data, error, loading, refetch: run };
+  return { data, error, loading, updatedAt, refetch: run };
 }

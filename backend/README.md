@@ -437,7 +437,7 @@ JOINED     -> WAITING, CANCELLED
 WAITING    -> CALLED, IN_SERVICE, SKIPPED, CANCELLED
 CALLED     -> IN_SERVICE, SKIPPED, CANCELLED
 IN_SERVICE -> DELAYED, PAUSED, COMPLETED
-DELAYED    -> IN_SERVICE, COMPLETED
+DELAYED    -> IN_SERVICE, DELAYED, COMPLETED
 PAUSED     -> IN_SERVICE, COMPLETED
 SKIPPED    -> WAITING, CANCELLED
 COMPLETED, CANCELLED -> (terminal)
@@ -448,8 +448,10 @@ COMPLETED, CANCELLED -> (terminal)
 customer" step — it goes straight from an idle/next-up card to Start
 Service. `CALLED` remains modeled for a future "call next" feature.
 `DELAY` transitions the entry to `DELAYED` and accumulates
-`QueueEntry.delayMinutes`; a barber can still `FINISH` from `DELAYED`
-directly. Enforced with `canTransition()` before every write — a
+`QueueEntry.delayMinutes`; further delay reports can be added while the
+entry is already delayed, and a barber can still `FINISH` directly. The
+live customer wait estimate includes that accumulated delay. Enforced with
+`canTransition()` before every write — a
 completed/cancelled entry can never be reopened, verified via curl and
 code review.
 

@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { User, Barber } from '../models/index.js';
+import { User, Barber, QueueEntry } from '../models/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 import {
   validateName,
@@ -7,6 +7,7 @@ import {
   normalizeMobileNumber,
   validatePassword,
 } from '../validation/authValidation.js';
+import { validateRequestId } from '../validation/queueValidation.js';
 
 const SALT_ROUNDS = 12;
 const BARBER_STATUSES = ['ACTIVE', 'INACTIVE'];
@@ -115,10 +116,77 @@ export async function getOwnBarberProfile(userId, shopId) {
   return barber;
 }
 
-export async function setOwnAvailability(userId, shopId, availability) {
-  if (!BARBER_AVAILABILITY.includes(availability)) throw new AppError(400, 'Invalid availability value.');
+export async function setOwnAvailability(userId, shopId, availability, requestId) {
+  if (!['AVAILABLE', 'ON_BREAK'].includes(availability)) throw new AppError(400, 'Availability can only be set to available or on break.');
+  const requestIdError = validateRequestId(requestId);
+  if (requestIdError) throw new AppError(400, requestIdError);
   const barber = await getOwnBarberProfile(userId, shopId);
-  barber.availability = availability;
-  await barber.save();
-  return barber;
+  const priorReceipt = barber.actionReceipts?.find((item) => item.requestId === requestId);
+  if (priorReceipt) {
+    if (priorReceipt.action !== 'availability' || priorReceipt.availability !== availability) {
+      throw new AppError(409, 'This request ID was already used for a different action.');
+    }
+    return barber;
+  }
+
+  const update = {
+    $set: { availability },
+    $push: {
+      actionReceipts: {
+        $each: [{ requestId, action: 'availability', availability, createdAt: new Date() }],
+        $slice: -50,
+      },
+    },
+  };
+
+  if (availability === 'ON_BREAK') {
+    const activeService = await QueueEntry.exists({
+      shopId,
+      barberId: barber._id,
+      status: { $in: ['IN_SERVICE', 'DELAYED', 'PAUSED'] },
+    });
+    if (activeService || barber.availability === 'BUSY') {
+      throw new AppError(409, 'Finish your current service before taking a break.');
+    }
+    const updated = await Barber.findOneAndUpdate(
+      {
+        _id: barber._id,
+        shopId,
+        availability: { $in: ['AVAILABLE', 'OFFLINE', 'ON_BREAK'] },
+        'actionReceipts.requestId': { $ne: requestId },
+      },
+      update,
+      { new: true }
+    );
+    if (updated) return updated;
+    const latest = await Barber.findOne({ _id: barber._id, shopId });
+    const receipt = latest?.actionReceipts?.find((item) => item.requestId === requestId);
+    if (receipt?.action === 'availability' && receipt.availability === availability) return latest;
+    throw new AppError(409, 'Your availability changed. Refresh the workspace and try again.');
+  }
+
+  const activeService = await QueueEntry.exists({
+    shopId,
+    barberId: barber._id,
+    status: { $in: ['IN_SERVICE', 'DELAYED', 'PAUSED'] },
+  });
+  if (activeService || barber.availability === 'BUSY') {
+    throw new AppError(409, 'Finish your current service before changing availability.');
+  }
+
+  const updated = await Barber.findOneAndUpdate(
+    {
+      _id: barber._id,
+      shopId,
+      availability: barber.availability,
+      'actionReceipts.requestId': { $ne: requestId },
+    },
+    update,
+    { new: true }
+  );
+  if (updated) return updated;
+  const latest = await Barber.findOne({ _id: barber._id, shopId });
+  const receipt = latest?.actionReceipts?.find((item) => item.requestId === requestId);
+  if (receipt?.action === 'availability' && receipt.availability === availability) return latest;
+  throw new AppError(409, 'Your availability changed. Refresh the workspace and try again.');
 }

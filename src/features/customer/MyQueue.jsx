@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync';
 import { checkInMyQueue, fetchMyQueue, cancelMyQueue } from '../../api/shopApi';
@@ -18,7 +18,7 @@ const QUEUE_STATUS = {
   PAUSED: { label: 'Queue paused', title: 'The queue is temporarily paused', progress: 32 },
 };
 
-const QUEUE_REFRESH_MS = 15_000;
+const QUEUE_REFRESH_MS = 10_000;
 
 function formatDeadline(value) {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(value));
@@ -31,10 +31,15 @@ export default function MyQueue() {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
+  const pollingRef = useRef(false);
 
   useEffect(() => {
     const refreshQueue = () => {
-      if (document.visibilityState === 'visible') void refetch({ quiet: true });
+      if (document.visibilityState !== 'visible' || pollingRef.current) return;
+      pollingRef.current = true;
+      void refetch({ quiet: true, throwOnError: true })
+        .catch(() => {})
+        .finally(() => { pollingRef.current = false; });
     };
     const timer = window.setInterval(refreshQueue, QUEUE_REFRESH_MS);
     document.addEventListener('visibilitychange', refreshQueue);
@@ -66,13 +71,19 @@ export default function MyQueue() {
 
   const position = entry.aheadCount + 1;
   const queueStatus = QUEUE_STATUS[entry.status] || QUEUE_STATUS.WAITING;
+  const serviceActive = entry.status === 'IN_SERVICE' || entry.status === 'DELAYED';
   const shopName = entry.shopName || entry.shop?.name || 'Your shop';
   const serviceName = entry.serviceName || entry.service?.name || 'Selected service';
   const barberName = entry.barberName || entry.barber?.name || null;
-  const waitLabel = entry.status === 'CALLED' || entry.status === 'IN_SERVICE'
-    ? 'Ready soon'
-    : `${entry.wait.min}–${entry.wait.max} min`;
-  const positionLabel = entry.status === 'IN_SERVICE' ? 'Now' : `#${position}`;
+  const remainingMinutes = Number.isFinite(entry.wait?.remainingMinutes)
+    ? entry.wait.remainingMinutes
+    : entry.wait?.min;
+  const waitLabel = serviceActive
+    ? `${remainingMinutes} min remaining`
+    : entry.status === 'CALLED'
+      ? 'Ready soon'
+      : `${entry.wait.min}–${entry.wait.max} min`;
+  const positionLabel = serviceActive ? 'Now' : `#${position}`;
 
   async function handleLeave() {
     setLeaving(true);
@@ -117,10 +128,15 @@ export default function MyQueue() {
             <h2>{shopName}</h2>
             <p>{serviceName}</p>
           </div>
-          <span className={styles.checkedIn}><span aria-hidden="true" />{entry.arrivedAt || entry.status === 'IN_SERVICE' ? 'Arrived' : 'In queue'}</span>
+          <span className={styles.checkedIn}><span aria-hidden="true" />{entry.arrivedAt || serviceActive ? 'Arrived' : 'In queue'}</span>
         </section>
 
         <section className={styles.queueHero} aria-label="Live queue status">
+          {error && (
+            <p className={styles.refreshNotice} role="status">
+              Couldn't refresh your queue. Showing the last update.
+            </p>
+          )}
           <div className={styles.heroTop}>
             <span className={styles.liveBadge}><span aria-hidden="true" />{queueStatus.label}</span>
             <span className={styles.statusWord}>{entry.status.replaceAll('_', ' ')}</span>
@@ -131,7 +147,7 @@ export default function MyQueue() {
               <p className={styles.position}>{positionLabel}</p>
             </div>
             <div className={styles.waitStat}>
-              <p className={styles.statLabel}>Estimated wait</p>
+              <p className={styles.statLabel}>{serviceActive ? 'Estimated service time left' : 'Estimated wait'}</p>
               <p className={styles.wait}>{waitLabel}</p>
             </div>
           </div>
@@ -148,7 +164,7 @@ export default function MyQueue() {
           <div className={styles.heroMessage}>
             <strong>{queueStatus.title}</strong>
             <span>
-              {entry.status === 'IN_SERVICE'
+              {serviceActive
                 ? 'Your barber is taking care of you now.'
                 : entry.status === 'CALLED'
                   ? entry.arrivedAt
@@ -170,7 +186,7 @@ export default function MyQueue() {
             <h2>{barberName || 'Not assigned yet'}</h2>
           </div>
           <span className={styles.barberStatus}>
-            {entry.status === 'IN_SERVICE' ? 'In service' : barberName ? 'Assigned' : 'Pending'}
+            {serviceActive ? 'In service' : barberName ? 'Assigned' : 'Pending'}
           </span>
         </section>
 
@@ -190,7 +206,7 @@ export default function MyQueue() {
             </div>
             <div>
               <dt>Wait range</dt>
-              <dd>{entry.wait.min}–{entry.wait.max} min</dd>
+                <dd>{serviceActive ? `${remainingMinutes} min remaining` : `${entry.wait.min}–${entry.wait.max} min`}</dd>
             </div>
             {entry.arrivalDeadlineAt && entry.status === 'CALLED' && (
               <div>
