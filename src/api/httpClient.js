@@ -22,6 +22,7 @@ export async function apiRequest(path, { method = 'GET', body } = {}) {
       method,
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      cache: 'no-store',
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
@@ -51,7 +52,7 @@ export async function apiRequest(path, { method = 'GET', body } = {}) {
 export async function apiBlobRequest(path) {
   let response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { credentials: 'include' });
+    response = await fetch(`${API_BASE}${path}`, { credentials: 'include', cache: 'no-store' });
   } catch {
     const err = new Error("Couldn't reach the server. Check your connection and try again.");
     err.status = 0;

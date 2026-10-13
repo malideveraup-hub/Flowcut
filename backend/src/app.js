@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import mongoose from 'mongoose';
 import { env } from './config/env.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
+import { noStoreApiResponse } from './middleware/noStoreApiResponse.js';
 import authRoutes from './routes/authRoutes.js';
 import shopRoutes from './routes/shopRoutes.js';
 import queueRoutes from './routes/queueRoutes.js';
@@ -47,6 +48,12 @@ export function createApp() {
       },
     });
   });
+
+  // Queue and barber responses include live, user-specific service state.
+  // Do not let browsers or intermediary caches replay an earlier timer.
+  app.use('/api/queue', noStoreApiResponse);
+  app.use('/api/barber', noStoreApiResponse);
+  app.use('/api/shops/:shopId/queue', noStoreApiResponse);
 
   // Feature routes.
   app.use('/api/auth', authRoutes);

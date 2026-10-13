@@ -15,12 +15,14 @@ import styles from './BarberHome.module.css';
 const REFRESH_INTERVAL_MS = 15_000;
 const SERVICE_TIME_STEPS = [3, 5, 10];
 const TIMER_WARNING_SECONDS = 5 * 60;
+const EMPTY_SERVICE_TIMER = Object.freeze({ entryId: null, sessionKey: null, elapsed: null, remaining: null, overtime: null });
 
-function useServiceTimer(startedAt, baseMinutes, extraMinutes, serverNow) {
-  const [timer, setTimer] = useState({ elapsed: null, remaining: null, overtime: null });
+function useServiceTimer(entryId, startedAt, baseMinutes, extraMinutes, serverNow) {
+  const [timer, setTimer] = useState(EMPTY_SERVICE_TIMER);
+  const sessionKey = JSON.stringify([entryId, startedAt, baseMinutes, extraMinutes]);
 
   useEffect(() => {
-    if (!startedAt) return undefined;
+    if (!entryId || !startedAt) return undefined;
     const startedAtMs = new Date(startedAt).getTime();
     if (!Number.isFinite(startedAtMs)) return undefined;
     const serverNowMs = serverNow ? new Date(serverNow).getTime() : NaN;
@@ -35,20 +37,21 @@ function useServiceTimer(startedAt, baseMinutes, extraMinutes, serverNow) {
       const monotonicNow = window.performance?.now?.() ?? Date.now();
       const elapsed = Math.max(0, Math.floor((initialElapsedMs + monotonicNow - monotonicStart) / 1000));
       setTimer({
+        entryId,
+        sessionKey,
         elapsed,
         remaining: Math.max(0, totalSeconds - elapsed),
         overtime: Math.max(0, elapsed - totalSeconds),
       });
     };
-    const initialTick = window.setTimeout(tick, 0);
-    const timer = window.setInterval(tick, 1000);
-    return () => {
-      window.clearTimeout(initialTick);
-      window.clearInterval(timer);
-    };
-  }, [startedAt, baseMinutes, extraMinutes, serverNow]);
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [entryId, startedAt, baseMinutes, extraMinutes, serverNow, sessionKey]);
 
-  return startedAt ? timer : { elapsed: null, remaining: null, overtime: null };
+  return entryId && timer.entryId === entryId && timer.sessionKey === sessionKey
+    ? timer
+    : EMPTY_SERVICE_TIMER;
 }
 
 function Icon({ name, className }) {
@@ -138,6 +141,7 @@ export default function BarberHome() {
   const previousTimerStateRef = useRef({ entryId: null, state: 'normal' });
   const current = data?.current;
   const serviceTimer = useServiceTimer(
+    current?.id,
     current?.startedAt,
     current?.baseMinutes,
     current?.extraMinutes,
