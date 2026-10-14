@@ -45,8 +45,10 @@ function loadEnv() {
     throw new Error('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must both be set to enable web push.');
   }
 
+  const nodeEnv = process.env.NODE_ENV || 'development';
+
   return {
-    nodeEnv: process.env.NODE_ENV || 'development',
+    nodeEnv,
     port: Number(process.env.PORT) || 4000,
     mongoUri: process.env.MONGODB_URI,
     jwtSecret: process.env.JWT_SECRET,
@@ -58,6 +60,7 @@ function loadEnv() {
     smtpPass: (process.env.SMTP_PASS || '').replace(/\s+/g, ''),
     mailFrom: (process.env.MAIL_FROM || process.env.SMTP_USER || '').trim(),
     resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
+    frontendUrl: (process.env.FRONTEND_URL || (nodeEnv === 'production' ? 'https://www.flowcutph.me' : 'http://localhost:5173')).replace(/\/+$/, ''),
     vapidPublicKey,
     vapidPrivateKey,
     vapidSubject: (process.env.VAPID_SUBJECT || 'https://www.flowcutph.me').trim(),

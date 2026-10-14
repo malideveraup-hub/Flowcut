@@ -42,13 +42,12 @@ export function validateMobileNumber(raw) {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Email is OPTIONAL — only call this when the user actually typed
-// something in the email field (see Register.jsx). This function itself
-// still treats an empty string as invalid, since "should I validate at
-// all" and "is this string a valid email" are different questions.
+// Email is optional in some forms, so those forms should skip this call
+// when blank. When called, the value must be a Gmail address.
 export function validateEmail(email) {
-  const trimmed = (email || '').trim();
-  if (!trimmed) return 'Enter a valid email address.';
+  if (typeof email !== 'string') return 'Enter a valid email address.';
+  const trimmed = email.trim();
+  if (!trimmed) return 'Email is required.';
   if (trimmed.length > 254) return 'Email is too long.';
   if (!EMAIL_RE.test(trimmed)) return 'Enter a valid email address.';
   if (!trimmed.toLowerCase().endsWith('@gmail.com')) return 'Use a Gmail address ending in @gmail.com.';
@@ -56,7 +55,7 @@ export function validateEmail(email) {
 }
 
 export function normalizeEmail(email) {
-  return (email || '').trim().toLowerCase();
+  return typeof email === 'string' ? email.trim().toLowerCase() : '';
 }
 
 export function validatePassword(password) {

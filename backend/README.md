@@ -26,7 +26,42 @@ Open `.env` and fill in:
   ```bash
   node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
   ```
-- Leave the rest as-is for local development.
+- Configure transactional email below if you want registration codes and password-reset links delivered.
+
+## Test the site from a phone on your Wi-Fi
+
+Vite listens on all network interfaces at port `5173`, and the backend listens on all interfaces at port `4000`. Connect the phone and development computer to the same Wi-Fi, find the computer's private IPv4 address with `ipconfig`, then open `http://<computer-ip>:5173` on the phone. For example, use `http://192.168.1.42:5173` if that is the computer's address.
+
+The browser API client uses `VITE_API_URL` from the repository root. If it is unset or points to `localhost` during development, FlowCut uses the same hostname as the page on port `4000`; `localhost` on a phone would otherwise point back to the phone. Vite does not load `src/.env.local`, so put any override in a root `.env.local`. Leave the override unset for LAN testing unless you need to point at a different API host.
+
+For development only, the API allows credentialed requests from private IPv4 Vite origins on port `5173`, in addition to the configured exact origins. Production still requires exact origins. Sign in separately on each device; the session is an HttpOnly cookie and is restored by `GET /api/auth/me` after a reload. The JWT lasts seven days by default and there is no refresh-token endpoint. An expired session returns `401` and protected actions ask the user to sign in again.
+
+For a deployed frontend, set `VITE_API_URL` in its build environment to the HTTPS backend origin. Set backend `CORS_ORIGIN` to the exact frontend origin, such as `https://www.flowcutph.me`; keep both sides on HTTPS so the production `SameSite=None; Secure` auth cookie can be stored and sent. Do not use a wildcard CORS origin with credentials. Mobile browsers may block cookies when the API is on a different site, so using an API hostname under the frontend's same parent domain is preferable when deploying.
+
+The Vite development server is available to other devices on the local network while running. Stop it when phone testing is finished.
+
+## Transactional email
+
+The backend sends registration verification codes and password-reset links through SMTP or Resend.
+
+For local development with Gmail SMTP, set:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-sending-account@gmail.com
+SMTP_PASS=your-google-app-password
+MAIL_FROM=your-sending-account@gmail.com
+FRONTEND_URL=http://localhost:5173
+```
+
+Use a Google App Password for `SMTP_PASS`, not the account's normal password. The SMTP sender should match `SMTP_USER`. When all three SMTP credentials are configured, development uses SMTP even if a Resend API key is also present.
+
+For production with Resend, set `RESEND_API_KEY`, `MAIL_FROM`, and `FRONTEND_URL` in the hosting provider's environment settings. Verify the sender domain in Resend and use a `MAIL_FROM` address on that verified domain; a personal `@gmail.com` address is not a domain you can verify. If Resend is not configured, the backend uses SMTP when its credentials are present.
+
+`FRONTEND_URL` is the deployed frontend origin used to build reset links. It defaults to localhost during development and FlowCut's production URL when `NODE_ENV=production`. Set it explicitly for staging or custom domains.
+
+The forgot-password response is intentionally the same for registered and unregistered addresses. The backend awaits the provider response and logs whether it accepted the message; provider acceptance does not guarantee inbox delivery. On failure, check the backend log for `[mail] Password reset delivery failed`. Never paste API keys or SMTP passwords into logs, issues, or chat.
 
 ## Closed-browser queue push notifications
 
@@ -307,7 +342,9 @@ hardcoded demo accounts) with real, MongoDB-backed authentication.
 
 ### Why cookies instead of localStorage/a returned token
 
-The brief asked for HttpOnly cookies "if the architecture allows it" and to explain the tradeoff otherwise. It does allow it here — frontend (`:5173`) and backend (`:4000`) are both `localhost`, which browsers treat as the same *site* even on different ports, so a `SameSite=Lax` cookie is sent correctly in dev with no extra configuration. **The one thing to watch when deploying**: if the frontend and backend end up on genuinely different domains in production (e.g. a Vercel frontend + a Render backend), the cookie will need `SameSite=None; Secure`, which requires HTTPS on both sides. This is called out here so it isn't a surprise later — it is not yet a problem today.
+The local `localhost` setup makes the development cookie same-site even though Vite and Express use different ports. For current production behavior, see the deployment note below: cookies use `SameSite=None; Secure` and require HTTPS on both frontend and API.
+
+Current behavior is `SameSite=Lax` in development and `SameSite=None; Secure` in production. Frontend requests use `credentials: 'include'`; the JWT stays in an HttpOnly cookie and is restored through `GET /api/auth/me`. Production requires HTTPS for both frontend and API. If they are on different sites, mobile browsers may block the API cookie as third-party; an API hostname under the frontend's parent domain is preferable.
 
 ### Authorization middleware (`src/middleware/authMiddleware.js`)
 

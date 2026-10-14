@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth, normalizeRole } from '../../hooks/useAuth';
 import { loginRequest, rateLimitMessage } from '../../api/authApi';
 import { validateEmail, validatePassword } from '../../validation/authValidation';
@@ -9,6 +9,7 @@ import styles from './Auth.module.css';
 export default function Login() {
   const { setUser, homeFor } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,7 +21,11 @@ export default function Login() {
   const submittingRef = useRef(false);
 
   function goToDestination(role) {
-    navigate(homeFor(role), { replace: true });
+    const from = location.state?.from;
+    const returnPath = typeof from?.pathname === 'string' && from.pathname.startsWith('/')
+      ? `${from.pathname}${typeof from.search === 'string' ? from.search : ''}${typeof from.hash === 'string' ? from.hash : ''}`
+      : null;
+    navigate(returnPath || homeFor(role), { replace: true });
   }
 
   async function handleSubmit(e) {

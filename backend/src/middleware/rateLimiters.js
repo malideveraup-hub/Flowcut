@@ -35,3 +35,12 @@ export const gmailOtpLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: 'Too many Gmail verification requests. Please try again later.', errors: [] },
 });
+
+export const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  keyGenerator: gmailKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many password reset requests. Please try again later.', errors: [] },
+});

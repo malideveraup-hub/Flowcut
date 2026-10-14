@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import { env } from './config/env.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 import { noStoreApiResponse } from './middleware/noStoreApiResponse.js';
+import { isLocalDevelopmentOrigin } from './utils/localDevelopmentOrigin.js';
 import authRoutes from './routes/authRoutes.js';
 import shopRoutes from './routes/shopRoutes.js';
 import queueRoutes from './routes/queueRoutes.js';
@@ -24,7 +25,11 @@ export function createApp() {
     cors({
       // Use an exact allowlist so credentialed requests never need a wildcard.
       origin: (requestOrigin, callback) => {
-        const allowedOrigin = env.corsOrigins.includes(requestOrigin) ? requestOrigin : false;
+        const allowedOrigin =
+          env.corsOrigins.includes(requestOrigin) ||
+          (env.nodeEnv !== 'production' && isLocalDevelopmentOrigin(requestOrigin))
+            ? requestOrigin
+            : false;
         callback(null, allowedOrigin);
       },
       credentials: true,

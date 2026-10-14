@@ -88,6 +88,25 @@
   margin-bottom: 12px;
 }
 
+.resetSuccess {
+  color: var(--staff-ink);
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+}
+
+.resetSuccess p {
+  margin: 0 0 12px;
+}
+
+.resetSuccess a {
+  color: var(--staff-accent);
+  text-decoration: none;
+}
+
+.resetSuccess a:hover {
+  text-decoration: underline;
+}
+
 .otpGrid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));

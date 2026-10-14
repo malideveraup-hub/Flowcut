@@ -1,52 +1,18 @@
-// Central place for every call to the real backend auth API. Components
-// never call fetch() directly — this is the seam Section 22 asked for,
-// and it's also where `credentials: 'include'` (required to send/receive
-// the httpOnly auth cookie cross-origin in dev) lives exactly once.
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// Auth functions preserve the { data } result shape their existing callers
+// use while sharing the same transport, cookie handling, and error parsing
+// as all other frontend API requests.
+import { apiRequest } from './httpClient';
 
 async function request(path, { method = 'GET', body } = {}) {
-  let res;
-  try {
-    res = await fetch(`${API_BASE}${path}`, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    const err = new Error("Couldn't reach the server. Check your connection and try again.");
-    err.status = 0;
-    throw err;
-  }
-
-  let json = null;
-  try {
-    json = await res.json();
-  } catch {
-    // Non-JSON response (e.g. a proxy error page) — fall through to the
-    // generic message below rather than crashing on res.json().
-  }
-
-  if (!res.ok || !json || json.success === false) {
-    const message = json?.message || `Request failed (${res.status}).`;
-    const err = new Error(message);
-    err.status = res.status;
-    const retryAfter = Number(res.headers.get('retry-after'));
-    if (Number.isFinite(retryAfter) && retryAfter > 0) {
-      err.retryAfterSeconds = retryAfter;
-    }
-    // Normalize to null unless there's a genuinely non-empty field-error
-    // object — the backend's generic errors use `errors: []`, and an
-    // empty array is truthy in JS, so a naive `json.errors || null` here
-    // would make every caller's `if (err.fieldErrors)` check lie.
-    const rawErrors = json?.errors;
-    err.fieldErrors =
-      rawErrors && typeof rawErrors === 'object' && Object.keys(rawErrors).length > 0 ? rawErrors : null;
-    throw err;
-  }
-
-  return json;
+  const data = await apiRequest(path, {
+    method,
+    body,
+    // Login uses 401 for incorrect credentials. Keep the server's generic
+    // credential message there; other protected auth calls should prompt
+    // users to sign in again when their cookie has expired.
+    normalizeUnauthorized: path !== '/api/auth/login',
+  });
+  return { data };
 }
 
 export function rateLimitMessage(error) {
@@ -76,6 +42,14 @@ export function verifyEmailRequest({ email, otp }) {
 
 export function resendEmailRequest({ email }) {
   return request('/api/auth/resend-email', { method: 'POST', body: { email } });
+}
+
+export function forgotPasswordRequest({ email }) {
+  return request('/api/auth/forgot-password', { method: 'POST', body: { email } });
+}
+
+export function resetPasswordRequest({ token, password }) {
+  return request('/api/auth/reset-password', { method: 'POST', body: { token, password } });
 }
 
 export function getMeRequest() {

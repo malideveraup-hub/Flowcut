@@ -61,6 +61,26 @@ export async function resendEmail(req, res, next) {
   }
 }
 
+export async function forgotPassword(req, res, next) {
+  try {
+    const { email } = req.body || {};
+    const data = await authService.requestPasswordReset({ email });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resetPassword(req, res, next) {
+  try {
+    const { token, password } = req.body || {};
+    const data = await authService.resetPassword({ token, password });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // requireAuth has already populated req.user from a fresh DB read.
 export async function me(req, res) {
   res.json({ success: true, data: { user: req.user } });

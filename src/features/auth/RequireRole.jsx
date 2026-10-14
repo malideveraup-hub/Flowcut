@@ -7,13 +7,23 @@ import { useAuth } from '../../hooks/useAuth';
  * `location.state.from` so Login can send them back afterwards.
  */
 export default function RequireRole({ role, children }) {
-  const { role: currentRole, loading, consentCurrent, homeFor } = useAuth();
+  const { role: currentRole, loading, authError, refreshUser, consentCurrent, homeFor } = useAuth();
   const location = useLocation();
 
   const allowed = Array.isArray(role) ? role : [role];
 
   if (loading) {
     return null;
+  }
+
+  if (!currentRole && authError) {
+    return (
+      <section role="alert" style={{ maxWidth: 520, margin: '4rem auto', padding: 24 }}>
+        <h1>Couldn't check your sign-in</h1>
+        <p>{authError.message || "Couldn't reach the server. Check your connection and try again."}</p>
+        <button type="button" onClick={() => void refreshUser()}>Try again</button>
+      </section>
+    );
   }
 
   if (!currentRole) {

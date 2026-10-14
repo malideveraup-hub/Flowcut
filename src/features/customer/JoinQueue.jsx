@@ -22,7 +22,7 @@ export default function JoinQueue() {
   const navigate = useNavigate();
   const location = useLocation();
   const [params, setParams] = useSearchParams();
-  const { role } = useAuth();
+  const { role, loading: authLoading } = useAuth();
   const showToast = useToast();
 
   const loadShop = useCallback(() => fetchPublicShop(shopId), [shopId]);
@@ -55,7 +55,12 @@ export default function JoinQueue() {
   }
 
   function handleConfirmClick() {
+    if (authLoading) return;
     if (role !== 'customer') {
+      if (role) {
+        showToast('Joining a queue requires a customer account.', 'error');
+        return;
+      }
       navigate('/login', {
         state: { from: { pathname: location.pathname, search: `?serviceId=${serviceId}` } },
       });
@@ -72,6 +77,12 @@ export default function JoinQueue() {
       navigate('/my-queue');
     } catch (err) {
       setConfirmOpen(false);
+      if (err.status === 401) {
+        navigate('/login', {
+          state: { from: { pathname: location.pathname, search: `?serviceId=${serviceId}` } },
+        });
+        return;
+      }
       showToast(err.message, 'error');
     } finally {
       setJoining(false);
@@ -135,8 +146,8 @@ export default function JoinQueue() {
               ) : null;
             })()}
           </div>
-          <button className={styles.joinButton} type="button" onClick={handleConfirmClick} disabled={!serviceId || joining}>
-            {joining ? <><span className={styles.spinner} aria-hidden="true" /> Joining…</> : role === 'customer' ? 'Confirm and join' : 'Log in to join'}
+          <button className={styles.joinButton} type="button" onClick={handleConfirmClick} disabled={!serviceId || joining || authLoading}>
+            {joining ? <><span className={styles.spinner} aria-hidden="true" /> Joining…</> : authLoading ? 'Checking sign-in…' : role === 'customer' ? 'Confirm and join' : role ? 'Customer account required' : 'Log in to join'}
           </button>
         </section>
       </main>

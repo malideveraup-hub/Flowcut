@@ -16,18 +16,26 @@ const ROLE_HOME = {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
+
+  const updateUser = useCallback((nextUser) => {
+    setAuthError(null);
+    setUser(nextUser);
+  }, []);
 
   const refreshUser = useCallback(async () => {
-  try {
-    const { data } = await getMeRequest();
-    const nextUser = data?.user ? { ...data.user, role: normalizeRole(data.user.role) } : null;
-    setUser(nextUser);
-    return nextUser;
-  } catch {
-    setUser(null);
-    return null;
-  }
-}, []);
+    try {
+      const { data } = await getMeRequest();
+      const nextUser = data?.user ? { ...data.user, role: normalizeRole(data.user.role) } : null;
+      setAuthError(null);
+      setUser(nextUser);
+      return nextUser;
+    } catch (error) {
+      setAuthError(error.status === 401 ? null : error);
+      if (error.status === 401) setUser(null);
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -48,6 +56,7 @@ export function AuthProvider({ children }) {
       await unregisterQueuePushSubscription();
       await logoutRequest();
     } finally {
+      setAuthError(null);
       setUser(null);
     }
   }
@@ -59,7 +68,8 @@ export function AuthProvider({ children }) {
     shopId: user?.shopId || null,
     consentCurrent: user ? user.consentCurrent === true : true,
     loading,
-    setUser,
+    authError,
+    setUser: updateUser,
     refreshUser,
     logout,
     homeFor: (r) => ROLE_HOME[normalizeRole(r)] || '/',

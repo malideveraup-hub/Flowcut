@@ -20,10 +20,16 @@ import {
   CURRENT_PRIVACY_VERSION,
 } from '../validation/consentValidation.js';
 import { ACTIVE_QUEUE_STATUSES } from '../validation/queueValidation.js';
-import { sendOtpEmail } from './mailService.js';
+import {
+  activeMailProvider,
+  mailErrorDetails,
+  sendOtpEmail,
+  sendPasswordResetEmail,
+} from './mailService.js';
 
 const SALT_ROUNDS = 12;
 const OTP_TTL_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 function sendRegistrationOtpEmail(email, otp) {
   sendOtpEmail(email, otp).catch((err) => {
@@ -198,6 +204,69 @@ export async function resendEmailOtp({ email }) {
   user.otpSentAt = new Date();
   await user.save({ validateBeforeSave: false });
   return { email: normalizedEmail, expiresAt: user.otpExpiresAt.toISOString() };
+}
+
+export async function requestPasswordReset({ email }) {
+  const emailErr = validateEmail(email);
+  if (emailErr) {
+    throw new AppError(400, 'Please enter a valid Gmail address.', { email: emailErr });
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  const user = await User.findOne({ email: normalizedEmail });
+  if (user && !user.isDeleted) {
+    const token = crypto.randomBytes(32).toString('hex');
+    user.passwordResetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    user.passwordResetExpiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+    await user.save({ validateBeforeSave: false });
+
+    try {
+      const delivery = await sendPasswordResetEmail(normalizedEmail, token);
+      console.info(
+        `[mail] Password reset accepted by provider=${delivery.provider} messageId=${delivery.messageId || 'unavailable'}`
+      );
+    } catch (error) {
+      console.error(
+        `[mail] Password reset delivery failed provider=${activeMailProvider} ${mailErrorDetails(error)}`
+      );
+    }
+  }
+
+  // Keep this response identical for known and unknown addresses.
+  return { message: 'If an account exists for that Gmail, a password reset link will be sent.' };
+}
+
+export async function resetPassword({ token, password }) {
+  if (typeof token !== 'string' || !/^[a-f\d]{64}$/i.test(token)) {
+    throw new AppError(400, 'This reset link is invalid or expired.');
+  }
+
+  const passwordErr = validatePassword(password);
+  if (passwordErr) {
+    throw new AppError(400, 'Please choose a valid password.', { password: passwordErr });
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const resetCriteria = {
+    passwordResetTokenHash: tokenHash,
+    passwordResetExpiresAt: { $gt: new Date() },
+    isDeleted: { $ne: true },
+  };
+  const matchingUser = await User.findOne(resetCriteria).select('_id');
+  if (!matchingUser) throw new AppError(400, 'This reset link is invalid or expired.');
+
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const user = await User.findOneAndUpdate(
+    { ...resetCriteria, passwordResetExpiresAt: { $gt: new Date() } },
+    {
+      $set: { passwordHash },
+      $unset: { passwordResetTokenHash: '', passwordResetExpiresAt: '' },
+    },
+    { new: true, runValidators: true }
+  );
+
+  if (!user) throw new AppError(400, 'This reset link is invalid or expired.');
+  return { message: 'Your password has been reset.' };
 }
 
 export async function authenticateUser({ email, password }) {
