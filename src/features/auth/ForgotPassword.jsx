@@ -60,7 +60,7 @@ export default function ForgotPassword() {
           {sent ? (
             <div className={styles.forgotSuccess} role="status">
               <span className={styles.forgotSuccessIcon} aria-hidden="true">✓</span>
-              <p>If an account exists for <strong>{email.trim()}</strong>, you should receive a reset link shortly. Check your inbox and spam folder. The link expires in one hour.</p>
+              <p>If an account exists for <strong>{email.trim()}</strong>, FlowCut will try to email a reset link. Check your inbox and spam folder. If it doesn’t arrive, confirm the address and try again later. The link expires in one hour.</p>
             </div>
           ) : (
             <form className={styles.loginForm} onSubmit={handleSubmit} noValidate>

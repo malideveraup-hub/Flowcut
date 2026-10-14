@@ -6,7 +6,8 @@ import { AppError } from '../middleware/errorHandler.js';
 const hasSmtpConfig = Boolean(env.smtpUser && env.smtpPass && env.mailFrom);
 const useResend = Boolean(env.resendApiKey && (env.nodeEnv === 'production' || !hasSmtpConfig));
 const smtpIpv4 = useResend ? null : (await dns.resolve4(env.smtpHost))[0];
-console.log(`[mail] Provider: ${useResend ? 'resend' : 'smtp'}`);
+const providerConfigured = useResend ? Boolean(env.resendApiKey && env.mailFrom) : hasSmtpConfig;
+console.log(`[mail] Provider: ${useResend ? 'resend' : 'smtp'} configured=${providerConfigured}`);
 if (smtpIpv4) console.log(`[mail] SMTP target: ${smtpIpv4}:${env.smtpPort}`);
 
 const transporter = useResend
@@ -26,7 +27,8 @@ const transporter = useResend
 export const activeMailProvider = useResend ? 'resend' : 'smtp';
 
 function safeCode(value) {
-  return typeof value === 'string' ? value.replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 80) : '';
+  if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) return '';
+  return String(value).replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 80);
 }
 
 export function mailErrorDetails(error) {
@@ -43,6 +45,13 @@ export function mailErrorDetails(error) {
 
 async function sendMail({ email, subject, text, html }) {
   if (useResend) {
+    if (!env.mailFrom) {
+      const error = new AppError(503, 'Email delivery is not configured.');
+      error.providerCode = 'missing_sender';
+      error.statusCode = 503;
+      throw error;
+    }
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -50,6 +59,7 @@ async function sendMail({ email, subject, text, html }) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ from: env.mailFrom, to: [email], subject, text, html }),
+      signal: AbortSignal.timeout(15_000),
     });
 
     let result = null;
@@ -69,7 +79,10 @@ async function sendMail({ email, subject, text, html }) {
   }
 
   if (!env.smtpUser || !env.smtpPass || !env.mailFrom) {
-    throw new AppError(503, 'Email delivery is not configured.');
+    const error = new AppError(503, 'Email delivery is not configured.');
+    error.providerCode = 'missing_configuration';
+    error.statusCode = 503;
+    throw error;
   }
 
   const result = await transporter.sendMail({ from: env.mailFrom, to: email, subject, text, html });
@@ -91,12 +104,14 @@ export function sendOtpEmail(email, otp) {
 }
 
 export function sendPasswordResetEmail(email, token) {
-  const resetUrl = `${env.frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
-  const htmlResetUrl = resetUrl.replaceAll('&', '&amp;');
+  const resetUrl = new URL('/reset-password', env.frontendUrl);
+  resetUrl.searchParams.set('token', token);
+  const resetUrlString = resetUrl.toString();
+  const htmlResetUrl = resetUrlString.replaceAll('&', '&amp;');
   return sendMail({
     email,
     subject: 'Reset your FlowCut password',
-    text: `Use this link to reset your FlowCut password: ${resetUrl}\n\nThe link expires in one hour. If you did not request this, you can ignore this email.`,
+    text: `Use this link to reset your FlowCut password: ${resetUrlString}\n\nThe link expires in one hour. If you did not request this, you can ignore this email.`,
     html: `<p>We received a request to reset your FlowCut password.</p><p><a href="${htmlResetUrl}">Reset your password</a></p><p>This link expires in one hour. If you did not request this, you can ignore this email.</p>`,
-  });
+  }).then((result) => ({ ...result, resetHost: resetUrl.host }));
 }

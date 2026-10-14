@@ -166,6 +166,13 @@ test('mobile and desktop origins keep authenticated queue and role access workin
     const joined = await join.json();
     assert.ok(joined.data.queueEntryId);
 
+    const mobileSessionAfterJoin = await get('/api/auth/me', mobileCookie, mobileOrigin);
+    assert.equal(mobileSessionAfterJoin.status, 200);
+    assert.equal((await mobileSessionAfterJoin.json()).data.user.role, 'customer');
+    const mobileQueue = await get('/api/queue/my', mobileCookie, mobileOrigin);
+    assert.equal(mobileQueue.status, 200);
+    assert.equal((await mobileQueue.json()).data.entry.id, joined.data.queueEntryId);
+
     const duplicate = await fetch(`${apiRoot}/api/shops/${shop._id}/queue`, {
       method: 'POST',
       headers: { Origin: mobileOrigin, Cookie: mobileCookie, 'Content-Type': 'application/json' },
@@ -184,6 +191,22 @@ test('mobile and desktop origins keep authenticated queue and role access workin
     assert.equal(checkIn.status, 200);
     const leaveQueue = await send('/api/queue/my', mobileCookie, mobileOrigin, 'DELETE');
     assert.equal(leaveQueue.status, 200);
+
+    stage = 'joining a queue from the desktop origin after leaving the mobile test queue';
+    const desktopJoin = await send(`/api/shops/${shop._id}/queue`, desktopCookie, desktopOrigin, 'POST', {
+      serviceId: String(service._id),
+    });
+    assert.equal(desktopJoin.status, 201);
+    const desktopJoined = await desktopJoin.json();
+    assert.equal(await QueueEntry.countDocuments({
+      customerId: customer._id,
+      status: { $in: ['JOINED', 'WAITING', 'CALLED', 'IN_SERVICE', 'DELAYED', 'PAUSED'] },
+    }), 1);
+    const desktopSessionAfterJoin = await get('/api/auth/me', desktopCookie, desktopOrigin);
+    assert.equal(desktopSessionAfterJoin.status, 200);
+    const desktopQueueAfterJoin = await get('/api/queue/my', desktopCookie, desktopOrigin);
+    assert.equal(desktopQueueAfterJoin.status, 200);
+    assert.equal((await desktopQueueAfterJoin.json()).data.entry.id, desktopJoined.data.queueEntryId);
 
     stage = 'distinguishing missing, expired, and insufficient-role access';
     assert.equal((await get('/api/queue/my', null)).status, 401);

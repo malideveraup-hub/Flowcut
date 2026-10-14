@@ -105,6 +105,41 @@ test('unknown Gmail gets the same public response and no email is attempted', as
   });
 });
 
+test('account lookup failures stay generic and log only a safe failure code', async (t) => {
+  let logLine = '';
+  t.mock.method(User, 'findOne', async () => {
+    throw Object.assign(new Error('Do not log this database detail or email.'), { code: 'ETESTDB' });
+  });
+  t.mock.method(console, 'error', (...args) => { logLine = args.join(' '); });
+
+  const result = await requestPasswordReset({ email: 'lookup-failure@gmail.com' });
+  assert.deepEqual(result, {
+    message: 'If an account exists for that Gmail, a password reset link will be sent.',
+  });
+  assert.match(logLine, /stage=account_lookup_failed code=ETESTDB/);
+  assert.doesNotMatch(logLine, /Do not log|lookup-failure@gmail\.com/);
+});
+
+test('reset-token storage failures stay generic and are logged before any email attempt', async (t) => {
+  const account = fakeAccount('storage-failure@gmail.com');
+  let logLine = '';
+  t.mock.method(User, 'findOne', async () => account);
+  account.save = async () => {
+    throw Object.assign(new Error('Do not log this document or token.'), { code: 121, name: 'MongoServerError' });
+  };
+  t.mock.method(globalThis, 'fetch', async () => {
+    assert.fail('Email must not be attempted unless its token was stored.');
+  });
+  t.mock.method(console, 'error', (...args) => { logLine = args.join(' '); });
+
+  const result = await requestPasswordReset({ email: 'storage-failure@gmail.com' });
+  assert.deepEqual(result, {
+    message: 'If an account exists for that Gmail, a password reset link will be sent.',
+  });
+  assert.match(logLine, /stage=token_storage_failed code=121/);
+  assert.doesNotMatch(logLine, /Do not log|storage-failure@gmail\.com|token=/);
+});
+
 test('provider rejection is logged safely and does not change the generic public response', async (t) => {
   const account = fakeAccount('rejected@gmail.com');
   let logLine = '';

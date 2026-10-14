@@ -213,23 +213,46 @@ export async function requestPasswordReset({ email }) {
   }
 
   const normalizedEmail = normalizeEmail(email);
-  const user = await User.findOne({ email: normalizedEmail });
-  if (user && !user.isDeleted) {
-    const token = crypto.randomBytes(32).toString('hex');
-    user.passwordResetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    user.passwordResetExpiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
-    await user.save({ validateBeforeSave: false });
+  let user;
+  try {
+    user = await User.findOne({ email: normalizedEmail });
+  } catch (error) {
+    console.error(`[password-reset] stage=account_lookup_failed ${mailErrorDetails(error)}`);
+    return { message: 'If an account exists for that Gmail, a password reset link will be sent.' };
+  }
 
-    try {
-      const delivery = await sendPasswordResetEmail(normalizedEmail, token);
-      console.info(
-        `[mail] Password reset accepted by provider=${delivery.provider} messageId=${delivery.messageId || 'unavailable'}`
-      );
-    } catch (error) {
-      console.error(
-        `[mail] Password reset delivery failed provider=${activeMailProvider} ${mailErrorDetails(error)}`
-      );
-    }
+  if (!user || user.isDeleted) {
+    console.info('[password-reset] account_lookup=not_found');
+    return { message: 'If an account exists for that Gmail, a password reset link will be sent.' };
+  }
+  console.info('[password-reset] account_lookup=matched');
+
+  let token;
+  try {
+    token = crypto.randomBytes(32).toString('hex');
+  } catch (error) {
+    console.error(`[password-reset] stage=token_generation_failed ${mailErrorDetails(error)}`);
+    return { message: 'If an account exists for that Gmail, a password reset link will be sent.' };
+  }
+
+  user.passwordResetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  user.passwordResetExpiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+  try {
+    await user.save({ validateBeforeSave: false });
+  } catch (error) {
+    console.error(`[password-reset] stage=token_storage_failed ${mailErrorDetails(error)}`);
+    return { message: 'If an account exists for that Gmail, a password reset link will be sent.' };
+  }
+
+  try {
+    const delivery = await sendPasswordResetEmail(normalizedEmail, token);
+    console.info(
+      `[mail] Password reset accepted by provider=${delivery.provider} messageId=${delivery.messageId || 'unavailable'} frontendHost=${delivery.resetHost}`
+    );
+  } catch (error) {
+    console.error(
+      `[mail] Password reset delivery failed provider=${activeMailProvider} ${mailErrorDetails(error)}`
+    );
   }
 
   // Keep this response identical for known and unknown addresses.

@@ -38,6 +38,8 @@ For development only, the API allows credentialed requests from private IPv4 Vit
 
 For a deployed frontend, set `VITE_API_URL` in its build environment to the HTTPS backend origin. Set backend `CORS_ORIGIN` to the exact frontend origin, such as `https://www.flowcutph.me`; keep both sides on HTTPS so the production `SameSite=None; Secure` auth cookie can be stored and sent. Do not use a wildcard CORS origin with credentials. Mobile browsers may block cookies when the API is on a different site, so using an API hostname under the frontend's same parent domain is preferable when deploying.
 
+The currently deployed FlowCut frontend is `https://www.flowcutph.me` on Vercel and its API is `https://flowcut-backend.onrender.com` on Render. Set the Vercel build variable to `VITE_API_URL=https://flowcut-backend.onrender.com`; set Render's `CORS_ORIGIN` to `https://www.flowcutph.me`.
+
 The Vite development server is available to other devices on the local network while running. Stop it when phone testing is finished.
 
 ## Transactional email
@@ -57,11 +59,11 @@ FRONTEND_URL=http://localhost:5173
 
 Use a Google App Password for `SMTP_PASS`, not the account's normal password. The SMTP sender should match `SMTP_USER`. When all three SMTP credentials are configured, development uses SMTP even if a Resend API key is also present.
 
-For production with Resend, set `RESEND_API_KEY`, `MAIL_FROM`, and `FRONTEND_URL` in the hosting provider's environment settings. Verify the sender domain in Resend and use a `MAIL_FROM` address on that verified domain; a personal `@gmail.com` address is not a domain you can verify. If Resend is not configured, the backend uses SMTP when its credentials are present.
+For production with Resend, set `NODE_ENV=production`, `RESEND_API_KEY`, `MAIL_FROM`, and `FRONTEND_URL` in the Render service's environment settings. For the current deployment, use `FRONTEND_URL=https://www.flowcutph.me` and `CORS_ORIGIN=https://www.flowcutph.me`. Verify `flowcutph.me` in Resend, add the SPF and DKIM records Resend provides at your DNS host, and use a `MAIL_FROM` address on that verified domain (for example, `FlowCut <no-reply@flowcutph.me>`); a personal `@gmail.com` address cannot be verified as your sending domain. If Resend is not configured, the backend uses SMTP when its credentials are present.
 
 `FRONTEND_URL` is the deployed frontend origin used to build reset links. It defaults to localhost during development and FlowCut's production URL when `NODE_ENV=production`. Set it explicitly for staging or custom domains.
 
-The forgot-password response is intentionally the same for registered and unregistered addresses. The backend awaits the provider response and logs whether it accepted the message; provider acceptance does not guarantee inbox delivery. On failure, check the backend log for `[mail] Password reset delivery failed`. Never paste API keys or SMTP passwords into logs, issues, or chat.
+The forgot-password response is intentionally the same for registered and unregistered addresses and internal failures. The backend logs safe stages such as `account_lookup`, `token_storage_failed`, provider acceptance, or provider delivery failure without logging the submitted email, token, reset URL, or credentials. Provider acceptance does not guarantee inbox delivery. Check Render logs for `[password-reset]` and `[mail]` events, then inspect Resend Email Logs/Events for accepted, delivered, bounced, or blocked status. Never paste API keys or SMTP passwords into logs, issues, or chat.
 
 ## Closed-browser queue push notifications
 

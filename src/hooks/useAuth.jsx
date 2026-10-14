@@ -1,6 +1,7 @@
-import { createContext, useContext, useCallback, useEffect, useState } from 'react';
+import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
 import { getMeRequest, logoutRequest } from '../api/authApi';
 import { unregisterQueuePushSubscription } from './queueBrowserAlerts';
+import { createAuthRequestGuard } from './authRequestGuard';
 
 const AuthContext = createContext(null);
 
@@ -17,25 +18,30 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
+  const authRequestGuard = useRef(null);
+  if (!authRequestGuard.current) authRequestGuard.current = createAuthRequestGuard();
 
   const updateUser = useCallback((nextUser) => {
+    authRequestGuard.current.invalidate();
     setAuthError(null);
     setUser(nextUser);
   }, []);
 
   const refreshUser = useCallback(async () => {
+    const request = authRequestGuard.current.begin();
     try {
       const { data } = await getMeRequest();
       const nextUser = data?.user ? { ...data.user, role: normalizeRole(data.user.role) } : null;
-      setAuthError(null);
-      setUser(nextUser);
+      if (!authRequestGuard.current.isCurrent(request)) return null;
+      updateUser(nextUser);
       return nextUser;
     } catch (error) {
-      setAuthError(error.status === 401 ? null : error);
-      if (error.status === 401) setUser(null);
+      if (!authRequestGuard.current.isCurrent(request)) return null;
+      if (error.status === 401) updateUser(null);
+      else setAuthError(error);
       return null;
     }
-  }, []);
+  }, [updateUser]);
 
   useEffect(() => {
     let active = true;
@@ -52,12 +58,15 @@ export function AuthProvider({ children }) {
   }, [refreshUser]);
 
   async function logout() {
+    // Invalidate pending session checks before awaiting service-worker or
+    // network work so an older /auth/me response cannot restore the user.
+    authRequestGuard.current.invalidate();
     try {
       await unregisterQueuePushSubscription();
       await logoutRequest();
     } finally {
       setAuthError(null);
-      setUser(null);
+      updateUser(null);
     }
   }
 
