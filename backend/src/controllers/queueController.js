@@ -162,6 +162,24 @@ export async function startService(req, res, next) {
   }
 }
 
+export async function pauseService(req, res, next) {
+  try {
+    const entry = await queueService.pauseService(req.barber.shopId, req.barber.id, req.params.entryId, req.body?.requestId);
+    res.json({ success: true, message: 'Service timer paused.', data: { entryId: entry._id.toString() } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resumeService(req, res, next) {
+  try {
+    const entry = await queueService.resumeService(req.barber.shopId, req.barber.id, req.params.entryId, req.body?.requestId);
+    res.json({ success: true, message: 'Service timer resumed.', data: { entryId: entry._id.toString() } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function finishService(req, res, next) {
   try {
     const result = await queueService.finishService(req.barber.shopId, req.barber.id, req.params.entryId, req.body?.requestId);

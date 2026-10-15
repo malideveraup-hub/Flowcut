@@ -15,7 +15,7 @@ const QUEUE_STATUS = {
   CALLED: { label: 'You are next', title: 'Please stay nearby', progress: 68 },
   IN_SERVICE: { label: 'In service', title: 'Your service has started', progress: 90 },
   DELAYED: { label: 'Running late', title: 'Your barber is running behind', progress: 42 },
-  PAUSED: { label: 'Queue paused', title: 'The queue is temporarily paused', progress: 32 },
+  PAUSED: { label: 'Service paused', title: 'Your service is temporarily paused', progress: 90 },
 };
 
 const QUEUE_REFRESH_MS = 10_000;
@@ -71,14 +71,16 @@ export default function MyQueue() {
 
   const position = entry.aheadCount + 1;
   const queueStatus = QUEUE_STATUS[entry.status] || QUEUE_STATUS.WAITING;
-  const serviceActive = entry.status === 'IN_SERVICE' || entry.status === 'DELAYED';
+  const serviceActive = entry.status === 'IN_SERVICE' || entry.status === 'DELAYED' || entry.status === 'PAUSED';
   const shopName = entry.shopName || entry.shop?.name || 'Your shop';
   const serviceName = entry.serviceName || entry.service?.name || 'Selected service';
   const barberName = entry.barberName || entry.barber?.name || null;
   const remainingMinutes = Number.isFinite(entry.wait?.remainingMinutes)
     ? entry.wait.remainingMinutes
     : entry.wait?.min;
-  const waitLabel = serviceActive
+  const waitLabel = entry.status === 'PAUSED'
+    ? `${remainingMinutes} min left when resumed`
+    : serviceActive
     ? `${remainingMinutes} min remaining`
     : entry.status === 'CALLED'
       ? 'Ready soon'
@@ -164,7 +166,9 @@ export default function MyQueue() {
           <div className={styles.heroMessage}>
             <strong>{queueStatus.title}</strong>
             <span>
-              {serviceActive
+              {entry.status === 'PAUSED'
+                ? 'Your barber paused the service timer. It will continue when they resume your service.'
+                : serviceActive
                 ? 'Your barber is taking care of you now.'
                 : entry.status === 'CALLED'
                   ? entry.arrivedAt
@@ -186,7 +190,7 @@ export default function MyQueue() {
             <h2>{barberName || 'Not assigned yet'}</h2>
           </div>
           <span className={styles.barberStatus}>
-            {serviceActive ? 'In service' : barberName ? 'Assigned' : 'Pending'}
+            {entry.status === 'PAUSED' ? 'Service paused' : serviceActive ? 'In service' : barberName ? 'Assigned' : 'Pending'}
           </span>
         </section>
 

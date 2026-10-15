@@ -54,7 +54,14 @@ function minutesRange(minutes) {
   return { min, max: min === 0 ? 0 : Math.max(min, Math.ceil(min * 1.3)), remainingMinutes: min };
 }
 
-export function calculateAssignedQueueWaitEstimate({ entry, entries, durationByServiceId, startedAtByEntryId, now }) {
+export function calculateAssignedQueueWaitEstimate({
+  entry,
+  entries,
+  durationByServiceId,
+  startedAtByEntryId,
+  pauseByEntryId = new Map(),
+  now,
+}) {
   const currentEntries = entries.filter((item) => SERVICE_IN_PROGRESS_STATUSES.includes(item.status));
   const current = currentEntries[0];
   const durationFor = (item) => item.baseMinutes
@@ -62,7 +69,11 @@ export function calculateAssignedQueueWaitEstimate({ entry, entries, durationByS
     || DEFAULT_SERVICE_MINUTES;
   const remainingFor = (item) => {
     const startedAt = startedAtByEntryId.get(String(item._id));
-    const elapsed = startedAt ? Math.max(0, (now - startedAt) / 60000) : 0;
+    const pause = pauseByEntryId.get(String(item._id));
+    const ongoingPauseMs = pause?.pausedAt ? Math.max(0, now - pause.pausedAt) : 0;
+    const elapsed = startedAt
+      ? Math.max(0, (now - startedAt - (Number(pause?.pausedDurationMs) || 0) - ongoingPauseMs) / 60000)
+      : 0;
     return Math.max(0, durationFor(item) + (item.delayMinutes || 0) - elapsed);
   };
 
@@ -93,7 +104,7 @@ export async function computeQueueWaitEstimate(shopId, entry, now = new Date()) 
       shopId,
       barberId: entry.barberId,
       status: { $in: ACTIVE_QUEUE_STATUSES },
-    }).select('_id serviceId status queuePosition delayMinutes baseMinutes');
+    }).select('_id serviceId status queuePosition delayMinutes baseMinutes pausedAt pausedDurationMs');
 
     const serviceIds = [...new Set(barberEntries.map((item) => String(item.serviceId)))];
     const [services, serviceLogs] = await Promise.all([
@@ -107,11 +118,13 @@ export async function computeQueueWaitEstimate(shopId, entry, now = new Date()) 
       String(service._id), service.estimatedDuration || DEFAULT_SERVICE_MINUTES,
     ]));
     const startedAtByEntryId = new Map(serviceLogs.map((log) => [String(log.queueEntryId), log.startTime]));
+    const pauseByEntryId = new Map(barberEntries.map((item) => [String(item._id), item]));
     return calculateAssignedQueueWaitEstimate({
       entry,
       entries: barberEntries,
       durationByServiceId: durationById,
       startedAtByEntryId,
+      pauseByEntryId,
       now,
     });
   }
@@ -123,7 +136,7 @@ export async function computeQueueWaitEstimate(shopId, entry, now = new Date()) 
       queuePosition: { $lt: entry.queuePosition },
     }).select('serviceId'),
     QueueEntry.find({ shopId, status: { $in: SERVICE_IN_PROGRESS_STATUSES } })
-      .select('serviceId delayMinutes'),
+      .select('serviceId delayMinutes pausedAt pausedDurationMs'),
     Barber.countDocuments({ shopId, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'BUSY'] } }),
   ]);
 
@@ -131,10 +144,12 @@ export async function computeQueueWaitEstimate(shopId, entry, now = new Date()) 
   const serviceIds = [...new Set(entries.map((item) => String(item.serviceId)))];
   const [services, serviceLogs] = await Promise.all([
     Service.find({ _id: { $in: serviceIds } }).select('_id estimatedDuration'),
-    ServiceLog.find({ queueEntryId: { $in: activeServices.map((item) => item._id) } }).select('queueEntryId startTime'),
+    ServiceLog.find({ queueEntryId: { $in: activeServices.map((item) => item._id) } })
+      .select('queueEntryId startTime'),
   ]);
   const durationById = new Map(services.map((service) => [String(service._id), service.estimatedDuration || DEFAULT_SERVICE_MINUTES]));
   const startByEntry = new Map(serviceLogs.map((log) => [String(log.queueEntryId), log.startTime]));
+  const pauseByEntry = new Map(activeServices.map((item) => [String(item._id), item]));
   const fallbackDuration = services.length
     ? services.reduce((total, service) => total + service.estimatedDuration, 0) / services.length
     : DEFAULT_SERVICE_MINUTES;
@@ -143,7 +158,11 @@ export async function computeQueueWaitEstimate(shopId, entry, now = new Date()) 
     const duration = durationById.get(String(item.serviceId)) ?? fallbackDuration;
     if (!activeIds.has(String(item._id))) return total + duration;
     const startedAt = startByEntry.get(String(item._id));
-    const elapsed = startedAt ? Math.max(0, (now - startedAt) / 60000) : 0;
+    const pause = pauseByEntry.get(String(item._id));
+    const ongoingPauseMs = pause?.pausedAt ? Math.max(0, now - pause.pausedAt) : 0;
+    const elapsed = startedAt
+      ? Math.max(0, (now - startedAt - (Number(pause?.pausedDurationMs) || 0) - ongoingPauseMs) / 60000)
+      : 0;
     return total + Math.max(0, duration - elapsed + (item.delayMinutes || 0));
   }, 0);
 

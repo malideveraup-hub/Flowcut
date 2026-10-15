@@ -6,6 +6,8 @@ import {
   fetchBarberDashboard,
   setMyAvailability,
   startService as startServiceRequest,
+  pauseService as pauseServiceRequest,
+  resumeService as resumeServiceRequest,
   finishService as finishServiceRequest,
   applyDelay as applyDelayRequest,
 } from '../../api/barberApi';
@@ -17,18 +19,23 @@ const SERVICE_TIME_STEPS = [3, 5, 10];
 const TIMER_WARNING_SECONDS = 5 * 60;
 const EMPTY_SERVICE_TIMER = Object.freeze({ entryId: null, sessionKey: null, elapsed: null, remaining: null, overtime: null });
 
-function useServiceTimer(entryId, startedAt, baseMinutes, extraMinutes, serverNow) {
+function useServiceTimer(entryId, startedAt, baseMinutes, extraMinutes, serverNow, pausedAt, pausedDurationMs, isPaused) {
   const [timer, setTimer] = useState(EMPTY_SERVICE_TIMER);
-  const sessionKey = JSON.stringify([entryId, startedAt, baseMinutes, extraMinutes]);
+  const sessionKey = JSON.stringify([entryId, startedAt, baseMinutes, extraMinutes, pausedAt, pausedDurationMs, isPaused]);
 
   useEffect(() => {
     if (!entryId || !startedAt) return undefined;
     const startedAtMs = new Date(startedAt).getTime();
     if (!Number.isFinite(startedAtMs)) return undefined;
     const serverNowMs = serverNow ? new Date(serverNow).getTime() : NaN;
+    const nowMs = Number.isFinite(serverNowMs) ? serverNowMs : Date.now();
+    const priorPausedMs = Math.max(0, Number(pausedDurationMs) || 0);
+    const currentPausedAtMs = pausedAt ? new Date(pausedAt).getTime() : NaN;
+    const freezeTimer = Boolean(isPaused || Number.isFinite(currentPausedAtMs));
+    const activePauseMs = Number.isFinite(currentPausedAtMs) ? Math.max(0, nowMs - currentPausedAtMs) : 0;
     const initialElapsedMs = Number.isFinite(serverNowMs)
-      ? Math.max(0, serverNowMs - startedAtMs)
-      : Math.max(0, Date.now() - startedAtMs);
+      ? Math.max(0, serverNowMs - startedAtMs - priorPausedMs - activePauseMs)
+      : Math.max(0, Date.now() - startedAtMs - priorPausedMs - activePauseMs);
     const monotonicStart = window.performance?.now?.() ?? Date.now();
     const totalMinutes = Number(baseMinutes) + (Number(extraMinutes) || 0);
     if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) return undefined;
@@ -45,9 +52,10 @@ function useServiceTimer(entryId, startedAt, baseMinutes, extraMinutes, serverNo
       });
     };
     tick();
+    if (freezeTimer) return undefined;
     const interval = window.setInterval(tick, 1000);
     return () => window.clearInterval(interval);
-  }, [entryId, startedAt, baseMinutes, extraMinutes, serverNow, sessionKey]);
+  }, [entryId, startedAt, baseMinutes, extraMinutes, serverNow, pausedAt, pausedDurationMs, isPaused, sessionKey]);
 
   return entryId && timer.entryId === entryId && timer.sessionKey === sessionKey
     ? timer
@@ -59,6 +67,7 @@ function Icon({ name, className }) {
   const paths = {
     cut: <><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="m8.5 8.5 12 12m-12-5 12-12" /></>,
     play: <path d="m8 5 11 7-11 7z" />,
+    pause: <><path d="M7 5h4v14H7z" /><path d="M15 5h4v14h-4z" /></>,
     check: <path d="m5 12 5 5L20 7" />,
     coffee: <><path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8Z" /><path d="M17 10h2a2 2 0 0 1 0 4h-2M7 3v2m4-2v2" /></>,
     people: <><circle cx="9" cy="8" r="3.5" /><path d="M2 20c0-4 3-6 7-6s7 2 7 6m0-15.5a3.5 3.5 0 0 1 0 7M18 14c2.5.6 4 2.5 4 6" /></>,
@@ -145,8 +154,12 @@ export default function BarberHome() {
     current?.startedAt,
     current?.baseMinutes,
     current?.extraMinutes,
-    data?.serverNow
+    data?.serverNow,
+    current?.pausedAt,
+    current?.pausedDurationMs,
+    current?.status === 'PAUSED'
   );
+  const timerPaused = Boolean(current && (current.status === 'PAUSED' || current.pausedAt));
   const timerState = !current || serviceTimer.remaining === null
     ? 'normal'
     : serviceTimer.remaining <= 0
@@ -261,7 +274,7 @@ export default function BarberHome() {
   const next = upNext[0];
   const remainingQueue = current ? upNext : upNext.slice(1);
   const statusLabel = current
-    ? current.status === 'PAUSED' ? 'Paused' : 'In service'
+    ? timerPaused ? 'Timer paused' : 'In service'
     : onBreak ? 'On break' : 'Available';
   const currentEstimate = current
     ? Number(current.baseMinutes) + (Number(current.extraMinutes) || 0)
@@ -322,10 +335,10 @@ export default function BarberHome() {
         <div className={styles.summaryPill}>
           <span>Status</span>
           <strong className={current
-            ? timerState === 'over' ? styles.statusRed : timerState === 'warning' ? styles.statusAmber : styles.statusGreen
+            ? timerPaused || timerState === 'warning' ? styles.statusAmber : timerState === 'over' ? styles.statusRed : styles.statusGreen
             : onBreak ? styles.statusAmber : ''}
           >
-            {timerState === 'over' ? 'Estimated time exceeded' : statusLabel}
+            {timerPaused ? 'Timer paused' : timerState === 'over' ? 'Estimated time exceeded' : statusLabel}
           </strong>
         </div>
         <div className={styles.summaryPill}>
@@ -346,8 +359,8 @@ export default function BarberHome() {
             <>
               <div className={styles.cardHeading}>
                 <span className={styles.sectionLabel}><span className={styles.liveDot} />Current customer</span>
-                <span className={`${styles.badge} ${timerState === 'over' ? styles.badgeRed : timerState === 'warning' || current.status === 'DELAYED' ? styles.badgeAmber : styles.badgeGreen}`}>
-                  {timerState === 'over' ? 'Estimated time exceeded' : statusLabel}
+                <span className={`${styles.badge} ${timerPaused || timerState === 'warning' || current.status === 'DELAYED' ? styles.badgeAmber : timerState === 'over' ? styles.badgeRed : styles.badgeGreen}`}>
+                  {timerPaused ? 'Timer paused' : timerState === 'over' ? 'Estimated time exceeded' : statusLabel}
                 </span>
               </div>
               <h2 className={styles.customerName}>
@@ -357,7 +370,7 @@ export default function BarberHome() {
               <p className={styles.serviceName}><Icon name="cut" />{current.serviceName || 'Service not specified'}</p>
 
               <div className={styles.timerBox}>
-                <span className={styles.mutedLabel}>{timerState === 'over' ? 'Estimated time exceeded' : 'Estimated time remaining'}</span>
+                <span className={styles.mutedLabel}>{timerPaused ? 'Timer paused' : timerState === 'over' ? 'Estimated time exceeded' : 'Estimated time remaining'}</span>
                 <strong
                   className={`${styles.timer} ${timerState === 'over' ? styles.timerOver : timerState === 'warning' ? styles.timerWarning : ''}`}
                   role="timer"
@@ -379,36 +392,57 @@ export default function BarberHome() {
                     {timerState === 'over' && <p className={styles.overNote}>Overtime: {formatDuration(serviceTimer.overtime)}</p>}
                   </>
                 )}
+                {timerPaused && <p className={styles.delayNote}>Elapsed service time is held until you resume.</p>}
                 {!current.startedAt && <p className={styles.delayNote}>The recorded start time isn't available for this service.</p>}
               </div>
 
-              <div className={styles.adjustTime}>
-                <span className={styles.mutedLabel}>Need more time? Adjust the estimate</span>
-                <div className={styles.adjustButtons}>
-                  {SERVICE_TIME_STEPS.map((minutes) => (
-                    <button
-                      className={`${styles.button} ${styles.buttonSmall}`}
-                      key={minutes}
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => runAction('delay', () => applyDelayRequest(current.id, minutes), `Added ${minutes} min to the estimate`)}
-                    >
-                      {isBusy && pendingAction === 'delay' ? <span className={styles.spinner} /> : `+${minutes} min`}
-                    </button>
-                  ))}
+              {!timerPaused && (
+                <div className={styles.adjustTime}>
+                  <span className={styles.mutedLabel}>Need more time? Adjust the estimate</span>
+                  <div className={styles.adjustButtons}>
+                    {SERVICE_TIME_STEPS.map((minutes) => (
+                      <button
+                        className={`${styles.button} ${styles.buttonSmall}`}
+                        key={minutes}
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => runAction('delay', () => applyDelayRequest(current.id, minutes), `Added ${minutes} min to the estimate`)}
+                      >
+                        {isBusy && pendingAction === 'delay' ? <span className={styles.spinner} /> : `+${minutes} min`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <button
-                className={`${styles.button} ${styles.buttonPrimary} ${styles.buttonBig}`}
-                type="button"
-                ref={finishButtonRef}
-                disabled={isBusy}
-                onClick={() => setFinishConfirmationOpen(true)}
-              >
-                {isBusy && pendingAction === 'finish' ? <span className={styles.spinner} /> : <Icon name="check" />}
-                {isBusy && pendingAction === 'finish' ? 'Finishing…' : 'Finish service'}
-              </button>
+              <div className={styles.serviceActions}>
+                <button
+                  className={`${styles.button} ${styles.buttonSecondary} ${styles.timerAction}`}
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => runAction(
+                    timerPaused ? 'resume' : 'pause',
+                    () => (timerPaused ? resumeServiceRequest(current.id) : pauseServiceRequest(current.id)),
+                    timerPaused ? 'Service timer resumed' : 'Service timer paused'
+                  )}
+                >
+                  {isBusy && (pendingAction === 'pause' || pendingAction === 'resume')
+                    ? <span className={styles.spinner} />
+                    : <Icon name={timerPaused ? 'play' : 'pause'} />}
+                  {isBusy && pendingAction === 'pause' ? 'Pausing timer…' : isBusy && pendingAction === 'resume' ? 'Resuming timer…' : timerPaused ? 'Resume timer' : 'Pause timer'}
+                </button>
+
+                <button
+                  className={`${styles.button} ${styles.buttonPrimary} ${styles.buttonBig}`}
+                  type="button"
+                  ref={finishButtonRef}
+                  disabled={isBusy}
+                  onClick={() => setFinishConfirmationOpen(true)}
+                >
+                  {isBusy && pendingAction === 'finish' ? <span className={styles.spinner} /> : <Icon name="check" />}
+                  {isBusy && pendingAction === 'finish' ? 'Finishing…' : 'Finish service'}
+                </button>
+              </div>
             </>
           ) : next ? (
             <>

@@ -135,6 +135,20 @@
   font-size: 19px;
 }
 
+.serviceActions {
+  margin-top: 22px;
+}
+
+.timerAction {
+  width: 100%;
+  min-height: 52px;
+  border-color: rgba(196, 181, 253, .3);
+}
+
+.serviceActions .buttonBig {
+  margin-top: 10px;
+}
+
 .srOnly {
   position: absolute;
   width: 1px;

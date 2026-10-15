@@ -20,6 +20,14 @@ export function startService(entryId, requestId = createRequestId()) {
   return apiRequest(`/api/barber/queue/${entryId}/start`, { method: 'PATCH', body: { requestId } });
 }
 
+export function pauseService(entryId, requestId = createRequestId()) {
+  return apiRequest(`/api/barber/queue/${entryId}/pause`, { method: 'PATCH', body: { requestId } });
+}
+
+export function resumeService(entryId, requestId = createRequestId()) {
+  return apiRequest(`/api/barber/queue/${entryId}/resume`, { method: 'PATCH', body: { requestId } });
+}
+
 export function finishService(entryId, requestId = createRequestId()) {
   return apiRequest(`/api/barber/queue/${entryId}/finish`, { method: 'PATCH', body: { requestId } });
 }

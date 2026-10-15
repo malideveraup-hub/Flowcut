@@ -401,9 +401,11 @@ export async function completeShopQueueEntry(shopId, entryId) {
   if (entry.barberId) {
     const serviceLog = await ServiceLog.findOne({ queueEntryId: entry._id });
     if (serviceLog) {
+      const pausedMs = Math.max(0, Number(entry.pausedDurationMs) || 0)
+        + (entry.pausedAt ? Math.max(0, finishedAt - entry.pausedAt) : 0);
       serviceLog.endTime = finishedAt;
       serviceLog.actualDuration = serviceLog.startTime
-        ? Math.max(0, (finishedAt - serviceLog.startTime) / 60000)
+        ? Math.max(0, (finishedAt - serviceLog.startTime - pausedMs) / 60000)
         : null;
       await serviceLog.save();
     } else {
@@ -416,6 +418,8 @@ export async function completeShopQueueEntry(shopId, entryId) {
     }
   }
   entry.status = 'COMPLETED';
+  entry.pausedAt = null;
+  entry.pausedFromStatus = null;
   await entry.save();
   await reconcileShopQueue(shopId, {
     callNextCount: 1,
@@ -642,6 +646,9 @@ export async function startService(shopId, barberId, entryId, requestId) {
           arrivedAt: entry.arrivedAt || startedAt,
           baseMinutes,
           delayMinutes: 0,
+          pausedAt: null,
+          pausedDurationMs: 0,
+          pausedFromStatus: null,
         },
         ...receiptUpdate(requestId, 'start'),
       },
@@ -687,6 +694,88 @@ export async function startService(shopId, barberId, entryId, requestId) {
   return claimedEntry;
 }
 
+export async function pauseService(shopId, barberId, entryId, requestId) {
+  requireRequestId(requestId);
+  const entry = await requireShopQueueEntry(shopId, entryId);
+  const priorReceipt = findActionReceipt(entry, requestId, 'pause');
+  if (priorReceipt) return entry;
+  requireAssignedBarber(entry, barberId);
+  if (!canTransition(entry.status, 'PAUSED')) {
+    throw new AppError(409, 'Only a service in progress can be paused.');
+  }
+
+  const serviceLog = await ServiceLog.findOne({ queueEntryId: entry._id }).select('startTime');
+  if (!serviceLog?.startTime || entry.pausedAt) {
+    throw new AppError(409, 'The service timer is unavailable or already paused. Refresh the workspace and try again.');
+  }
+
+  const pausedAt = new Date();
+  const pausedEntry = await QueueEntry.findOneAndUpdate(
+    {
+      _id: entry._id,
+      shopId,
+      barberId,
+      status: entry.status,
+      'actionReceipts.requestId': { $ne: requestId },
+    },
+    {
+      $set: { status: 'PAUSED', pausedAt, pausedFromStatus: entry.status },
+      ...receiptUpdate(requestId, 'pause'),
+    },
+    { new: true }
+  );
+  if (!pausedEntry) {
+    const latest = await QueueEntry.findById(entry._id);
+    const receipt = latest && findActionReceipt(latest, requestId, 'pause');
+    if (receipt) return latest;
+    throw new AppError(409, 'This service has already changed. Refresh the workspace and try again.');
+  }
+
+  return pausedEntry;
+}
+
+export async function resumeService(shopId, barberId, entryId, requestId) {
+  requireRequestId(requestId);
+  const entry = await requireShopQueueEntry(shopId, entryId);
+  const priorReceipt = findActionReceipt(entry, requestId, 'resume');
+  if (priorReceipt) return entry;
+  requireAssignedBarber(entry, barberId);
+  if (!entry.pausedAt || !canTransition(entry.status, 'IN_SERVICE')) {
+    throw new AppError(409, 'This service is not paused. Refresh the workspace and try again.');
+  }
+
+  const resumedStatus = entry.pausedFromStatus === 'DELAYED' ? 'DELAYED' : 'IN_SERVICE';
+  if (!canTransition(entry.status, resumedStatus)) {
+    throw new AppError(409, 'This service cannot be resumed from its current state.');
+  }
+  const resumedAt = new Date();
+  const pausedDuration = Math.max(0, resumedAt - entry.pausedAt);
+  const resumedEntry = await QueueEntry.findOneAndUpdate(
+    {
+      _id: entry._id,
+      shopId,
+      barberId,
+      status: 'PAUSED',
+      pausedAt: entry.pausedAt,
+      'actionReceipts.requestId': { $ne: requestId },
+    },
+    {
+      $set: { status: resumedStatus, pausedAt: null, pausedFromStatus: null },
+      $inc: { pausedDurationMs: pausedDuration },
+      ...receiptUpdate(requestId, 'resume'),
+    },
+    { new: true }
+  );
+  if (!resumedEntry) {
+    const latest = await QueueEntry.findById(entry._id);
+    const receipt = latest && findActionReceipt(latest, requestId, 'resume');
+    if (receipt) return latest;
+    throw new AppError(409, 'This service has already changed. Refresh the workspace and try again.');
+  }
+
+  return resumedEntry;
+}
+
 function requireAssignedBarber(entry, barberId) {
   if (!entry.barberId || String(entry.barberId) !== String(barberId)) {
     throw new AppError(403, 'This service is not assigned to you.');
@@ -709,7 +798,9 @@ export async function finishService(shopId, barberId, entryId, requestId) {
   if (!serviceLog?.startTime) {
     throw new AppError(409, 'The service start time is unavailable. Refresh the workspace and try again.');
   }
-  const actualMinutes = Math.max(0, (finishedAt - serviceLog.startTime) / 60000);
+  const activePauseMs = Math.max(0, Number(entry.pausedDurationMs) || 0)
+    + (entry.pausedAt ? Math.max(0, finishedAt - entry.pausedAt) : 0);
+  const actualMinutes = Math.max(0, (finishedAt - serviceLog.startTime - activePauseMs) / 60000);
   const completedEntry = await QueueEntry.findOneAndUpdate(
     {
       _id: entry._id,
@@ -719,7 +810,7 @@ export async function finishService(shopId, barberId, entryId, requestId) {
       'actionReceipts.requestId': { $ne: requestId },
     },
     {
-      $set: { status: 'COMPLETED' },
+      $set: { status: 'COMPLETED', pausedAt: null, pausedFromStatus: null },
       ...receiptUpdate(requestId, 'finish', Math.round(actualMinutes)),
     },
     { new: true }
@@ -739,7 +830,14 @@ export async function finishService(shopId, barberId, entryId, requestId) {
   } catch (err) {
     await QueueEntry.findOneAndUpdate(
       { _id: completedEntry._id, shopId, barberId, status: 'COMPLETED', updatedAt: completedEntry.updatedAt },
-      { $set: { status: previousStatus }, $pull: { actionReceipts: { requestId } } }
+      {
+        $set: {
+          status: previousStatus,
+          pausedAt: entry.pausedAt || null,
+          pausedFromStatus: entry.pausedFromStatus || null,
+        },
+        $pull: { actionReceipts: { requestId } },
+      }
     );
     throw err;
   }
@@ -837,6 +935,8 @@ export async function getBarberDashboard(shopId, barberId) {
       queuePosition: entry.queuePosition,
       startedAt: isCurrent ? serviceLog?.startTime || null : null,
       delayMinutes: entry.delayMinutes || 0,
+      pausedAt: isCurrent ? entry.pausedAt || null : null,
+      pausedDurationMs: isCurrent ? entry.pausedDurationMs || 0 : 0,
     };
   }
 

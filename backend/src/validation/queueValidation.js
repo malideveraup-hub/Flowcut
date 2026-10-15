@@ -12,17 +12,18 @@
 // a future "call next" feature.
 //
 // DELAYED and PAUSED are modeled as sub-states of an in-progress service
-// (Section 8: "IN_SERVICE -> DELAYED", "IN_SERVICE -> PAUSED/BREAK") that
+// (Section 8: "IN_SERVICE -> DELAYED" and "IN_SERVICE -> PAUSED") that
 // can resume back to IN_SERVICE or go straight to COMPLETED. A further
-// delay can be recorded while already delayed, and finishing while
-// running behind remains a normal completion.
+// delay can be recorded while already delayed; pausing preserves the prior
+// state so a delayed service resumes as DELAYED. Finishing remains valid
+// from either state.
 export const QUEUE_TRANSITIONS = {
   JOINED: ['WAITING', 'CANCELLED'],
   WAITING: ['CALLED', 'IN_SERVICE', 'SKIPPED', 'CANCELLED'],
   CALLED: ['IN_SERVICE', 'SKIPPED', 'CANCELLED'],
   IN_SERVICE: ['DELAYED', 'PAUSED', 'COMPLETED'],
-  DELAYED: ['IN_SERVICE', 'DELAYED', 'COMPLETED'],
-  PAUSED: ['IN_SERVICE', 'COMPLETED'],
+  DELAYED: ['IN_SERVICE', 'DELAYED', 'PAUSED', 'COMPLETED'],
+  PAUSED: ['IN_SERVICE', 'DELAYED', 'COMPLETED'],
   COMPLETED: [],
   SKIPPED: ['WAITING', 'CANCELLED'],
   CANCELLED: [],

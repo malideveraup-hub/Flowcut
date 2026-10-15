@@ -12,6 +12,8 @@ router.get('/dashboard', barberController.getMyDashboard);
 router.patch('/availability', barberController.setMyAvailability);
 
 router.patch('/queue/:entryId/start', validateObjectIdParam('entryId'), queueController.startService);
+router.patch('/queue/:entryId/pause', validateObjectIdParam('entryId'), queueController.pauseService);
+router.patch('/queue/:entryId/resume', validateObjectIdParam('entryId'), queueController.resumeService);
 router.patch('/queue/:entryId/finish', validateObjectIdParam('entryId'), queueController.finishService);
 router.patch('/queue/:entryId/delay', validateObjectIdParam('entryId'), queueController.applyDelay);
 

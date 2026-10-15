@@ -103,12 +103,28 @@ const queueEntrySchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // Active timer suspension state. These fields change in the same atomic
+    // update as status so dashboards and wait estimates see a consistent pause.
+    pausedAt: {
+      type: Date,
+      default: null,
+    },
+    pausedDurationMs: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    pausedFromStatus: {
+      type: String,
+      enum: ['IN_SERVICE', 'DELAYED', null],
+      default: null,
+    },
     // Keep a short replay window so a retried barber action with the same
-    // requestId cannot start, finish, or extend the queue entry twice.
+    // requestId cannot start, pause/resume, finish, or extend the entry twice.
     actionReceipts: {
       type: [{
         requestId: { type: String, required: true },
-        action: { type: String, required: true, enum: ['start', 'finish', 'extend'] },
+        action: { type: String, required: true, enum: ['start', 'pause', 'resume', 'finish', 'extend'] },
         minutes: { type: Number, default: null },
         createdAt: { type: Date, default: Date.now },
       }],
