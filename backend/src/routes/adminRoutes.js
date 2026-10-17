@@ -20,5 +20,7 @@ router.patch('/shops/:shopId/queue-qr', validateObjectIdParam('shopId'), adminCo
 router.get('/users', adminController.listUsers);
 router.get('/analytics/basic', adminController.basicAnalytics);
 router.get('/analytics/completed-services', adminController.completedServiceAnalytics);
+router.post('/analytics/ai-insights', adminController.getPlatformAiInsights);
+router.post('/analytics/ask-ai', adminController.askPlatformAi);
 
 export default router;

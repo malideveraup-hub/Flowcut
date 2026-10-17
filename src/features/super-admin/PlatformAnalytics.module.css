@@ -137,3 +137,279 @@
 @media (max-width: 360px) {
   .cards { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---- FlowCut Super Admin AI Insights ---- */
+.aiSection {
+  margin-bottom: 16px;
+}
+
+.aiCard {
+  border: 1px solid #dcd7fc;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #faf9ff 0%, #ffffff 100%);
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.aiCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--analytics-purple) 0%, #386bd1 50%, #17835e 100%);
+}
+
+.aiHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.aiTitleWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aiTitleWrap h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--analytics-ink);
+}
+
+.aiSubtext {
+  margin: 5px 0 0;
+  color: var(--analytics-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.aiError {
+  margin: 0 0 12px;
+  color: var(--analytics-red);
+  font-size: 11px;
+}
+
+.aiBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--analytics-purple-soft);
+  color: var(--analytics-purple);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.aiBadge svg {
+  width: 14px !important;
+  height: 14px !important;
+  max-width: 14px !important;
+  max-height: 14px !important;
+  flex-shrink: 0;
+}
+
+.aiRefreshBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--analytics-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--analytics-ink);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.aiRefreshBtn:hover:not(:disabled) {
+  border-color: var(--analytics-purple);
+  color: var(--analytics-purple);
+}
+
+.aiRefreshBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.aiGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.aiRecCard {
+  padding: 13px 15px;
+  border: 1px solid var(--analytics-line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.aiRecTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+
+.aiRecPill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--analytics-purple-soft);
+  color: var(--analytics-purple);
+}
+
+.aiRecPill.growth {
+  background: #e5f6ef;
+  color: var(--analytics-green);
+}
+
+.aiRecPill.benchmark {
+  background: #e9efff;
+  color: var(--analytics-blue);
+}
+
+.aiRecPill.quality {
+  background: #fff3df;
+  color: var(--analytics-amber);
+}
+
+.aiRecCard h3 {
+  margin: 0 0 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--analytics-ink);
+}
+
+.aiRecCard p {
+  margin: 0;
+  color: var(--analytics-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.askAiBox {
+  margin-top: 13px;
+  padding-top: 13px;
+  border-top: 1px solid var(--analytics-line);
+}
+
+.askAiHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--analytics-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.askAiHeader svg {
+  width: 16px !important;
+  height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+  flex-shrink: 0;
+  color: var(--analytics-purple);
+}
+
+.askAiForm {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.askAiInput {
+  flex: 1;
+  height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--analytics-line);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  color: var(--analytics-ink);
+  outline: 0;
+}
+
+.askAiInput:focus {
+  border-color: var(--analytics-purple);
+  box-shadow: 0 0 0 3px rgb(112 82 232 / 12%);
+}
+
+.askAiSubmit {
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--analytics-purple);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.askAiSubmit:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.askAiSubmit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.quickChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chipBtn {
+  padding: 4px 9px;
+  border: 1px solid var(--analytics-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--analytics-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chipBtn:hover {
+  border-color: var(--analytics-purple);
+  color: var(--analytics-purple);
+  background: var(--analytics-purple-soft);
+}
+
+.aiResponseBubble {
+  margin-top: 11px;
+  padding: 11px 14px;
+  border-radius: 9px;
+  background: #f8f7ff;
+  border-left: 3px solid var(--analytics-purple);
+  color: var(--analytics-ink);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .aiGrid {
+    grid-template-columns: 1fr;
+  }
+}

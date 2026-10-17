@@ -141,6 +141,12 @@
   margin-inline: auto;
 }
 
+.mainAnalytics {
+  max-width: 1320px;
+  margin-inline: auto;
+  padding: 0;
+}
+
 @media (max-width: 1024px) {
   .shell { flex-direction: column; }
   .shell.superAdmin { flex-direction: row; }
@@ -180,4 +186,5 @@
   .main { padding: var(--space-4); }
   .mainDashboard { padding: 0; }
   .mainQueue { padding: var(--space-4); }
+  .main.mainAnalytics { padding: 0; }
 }

@@ -591,7 +591,7 @@ export async function startService(shopId, barberId, entryId, requestId) {
   if (!nextEligible || String(nextEligible._id) !== String(entry._id)) {
     throw new AppError(409, 'This is no longer the next customer for your queue. Refresh the workspace.');
   }
-  const service = await Service.findOne({ _id: entry.serviceId, shopId }).select('estimatedDuration');
+  const service = await Service.findOne({ _id: entry.serviceId, shopId }).select('estimatedDuration price name');
   const baseMinutes = service?.estimatedDuration || DEFAULT_SERVICE_MINUTES;
 
   const alreadyServing = await QueueEntry.findOne({
@@ -670,6 +670,12 @@ export async function startService(shopId, barberId, entryId, requestId) {
     }
     serviceLog.barberId = barberId;
     serviceLog.serviceId = entry.serviceId;
+    if (serviceLog.priceAtStart == null && Number.isFinite(service?.price)) {
+      serviceLog.priceAtStart = service.price;
+    }
+    if (!serviceLog.serviceNameAtStart && service?.name) {
+      serviceLog.serviceNameAtStart = service.name;
+    }
     serviceLog.startTime = startedAt;
     serviceLog.endTime = null;
     serviceLog.actualDuration = null;

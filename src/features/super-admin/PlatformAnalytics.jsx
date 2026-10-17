@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchBasicAnalytics, fetchCompletedServiceAnalytics } from '../../api/adminApi';
+import { getPlatformAiInsights, askPlatformAi } from '../../api/aiAnalytics';
 import Skeleton from '../../components/ui/Skeleton';
 import { useAsync } from '../../hooks/useAsync';
 import styles from './PlatformAnalytics.module.css';
@@ -124,6 +125,7 @@ function isCompletedRecord(record) {
 }
 
 function getDuration(record) {
+  if (Number.isFinite(record.actual_duration) && record.actual_duration >= 0) return record.actual_duration;
   if (!isValidDate(record.service_started) || !isValidDate(record.service_finished)) return null;
   const minutes = (new Date(record.service_finished) - new Date(record.service_started)) / 60000;
   return minutes > 0 ? minutes : null;
@@ -163,6 +165,13 @@ export default function PlatformAnalytics() {
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [showAllShops, setShowAllShops] = useState(false);
   const [insightRange, setInsightRange] = useState(null);
+  const [aiInsights, setAiInsights] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiAnswer, setAiAnswer] = useState('');
+  const [aiAnswerError, setAiAnswerError] = useState('');
+  const [askingAi, setAskingAi] = useState(false);
 
   useEffect(() => {
     function handleOutside(event) {
@@ -225,12 +234,94 @@ export default function PlatformAnalytics() {
     .map((shop) => ({ ...shop, change: percentChange(shop.revenue, previousShops.get(shop.id)?.revenue || 0) }))
     .sort((left, right) => right.revenue - left.revenue);
   const displayedRankings = rankings.slice(0, showAllShops ? 8 : 4);
+  const platformDurations = currentRecords.map(getDuration).filter((duration) => duration !== null).sort((a, b) => a - b);
+  const platformDurationCounts = DURATION_RANGES.map(() => 0);
+  platformDurations.forEach((duration) => {
+    const index = bucketIndex(duration);
+    if (index >= 0) platformDurationCounts[index] += 1;
+  });
+  const platformMedianDuration = platformDurations.length
+    ? platformDurations.length % 2
+      ? platformDurations[Math.floor(platformDurations.length / 2)]
+      : (platformDurations[platformDurations.length / 2 - 1] + platformDurations[platformDurations.length / 2]) / 2
+    : null;
+  const mostCommonDurationIndex = platformDurationCounts.reduce(
+    (best, count, index) => count > platformDurationCounts[best] ? index : best,
+    0
+  );
+  const platformContext = {
+    rangeLabel: range.label,
+    currentRevenue,
+    previousRevenue,
+    growth,
+    activeShopCount,
+    completedCount: currentRecords.length,
+    averageRating,
+    approvedShops: stats.shopsByStatus.APPROVED || 0,
+    pendingShops: stats.shopsByStatus.PENDING || 0,
+    activeQueues: stats.activeQueueEntries || 0,
+    rankings: rankings.slice(0, 5).map(({ name, revenue: shopRevenueValue, change }) => ({
+      name,
+      revenue: shopRevenueValue,
+      change,
+    })),
+    averageDuration: platformDurations.length
+      ? platformDurations.reduce((total, duration) => total + duration, 0) / platformDurations.length
+      : null,
+    medianDuration: platformMedianDuration,
+    mostCommonDuration: platformDurations.length ? DURATION_RANGES[mostCommonDurationIndex].label : 'N/A',
+    durationSampleCount: platformDurations.length,
+  };
+
+  function clearAiResults() {
+    setAiInsights(null);
+    setAiError('');
+    setAiAnswer('');
+    setAiAnswerError('');
+  }
+
+  async function generateAiInsights() {
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const result = await getPlatformAiInsights(platformContext);
+      if (result?.status !== 'success') {
+        throw new Error(result?.message || 'Gemini could not generate insights. Check the backend Gemini configuration and try again.');
+      }
+      setAiInsights(result);
+    } catch (requestError) {
+      setAiError(requestError.message || 'Gemini could not generate insights. Please try again.');
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function askAiAboutPlatform(event) {
+    event.preventDefault();
+    const question = aiQuestion.trim();
+    if (!question) return;
+    setAskingAi(true);
+    setAiAnswer('');
+    setAiAnswerError('');
+    try {
+      const result = await askPlatformAi(question, platformContext);
+      if (result?.status !== 'success' || !result.answer) {
+        throw new Error(result?.message || 'Gemini could not answer that question. Please try again.');
+      }
+      setAiAnswer(result.answer);
+    } catch (requestError) {
+      setAiAnswerError(requestError.message || 'Gemini could not answer that question. Please try again.');
+    } finally {
+      setAskingAi(false);
+    }
+  }
 
   function chooseRange(key) {
     if (key === 'custom') {
       setCustomOpen(true);
       return;
     }
+    clearAiResults();
     setSelection({ key, from: null, to: null });
     setRangeMenuOpen(false);
   }
@@ -245,6 +336,7 @@ export default function PlatformAnalytics() {
       return;
     }
     setCustomError('');
+    clearAiResults();
     setSelection({ key: 'custom', from: customFrom, to: customTo });
     setCustomOpen(false);
     setRangeMenuOpen(false);
@@ -334,6 +426,63 @@ export default function PlatformAnalytics() {
           <div className={styles.statTop}>Customer satisfaction<span className={`${styles.icon} ${styles.amberIcon}`} aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2 20c0-4 3-6 7-6s7 2 7 6M16 5a3 3 0 0 1 0 6M18 14c2 .6 4 2.5 4 6" /></svg></span></div>
           <strong className={averageRating === null ? '' : styles.amberText}>{averageRating === null ? '—' : `${(averageRating / 5 * 100).toFixed(1)}%`}</strong>
           <small>{averageRating === null ? 'Ratings are not available' : `Based on ${ratingCount.toLocaleString()} post-cut ratings`}</small>
+        </article>
+      </section>
+
+      <section className={styles.aiSection} aria-labelledby="platform-ai-title">
+        <article className={styles.aiCard}>
+          <div className={styles.aiHeader}>
+            <div className={styles.aiTitleWrap}>
+              <div>
+                <h2 id="platform-ai-title">Gemini analytics assistant</h2>
+                <p className={styles.aiSubtext}>AI insights for {range.label}. Uses aggregate platform metrics and shop totals.</p>
+              </div>
+              <span className={styles.aiBadge}>Gemini AI</span>
+            </div>
+            <button className={styles.aiRefreshBtn} type="button" onClick={generateAiInsights} disabled={aiLoading}>
+              {aiLoading ? 'Analyzing…' : aiInsights ? 'Refresh insights' : 'Generate insights'}
+            </button>
+          </div>
+
+          {aiError && <p className={styles.aiError} role="alert">{aiError}</p>}
+          {aiInsights ? (
+            <div className={styles.aiGrid}>
+              {[
+                { key: 'growthInsights', title: 'Growth outlook', tone: 'growth' },
+                { key: 'shopBenchmarking', title: 'Shop benchmarking', tone: 'benchmark' },
+                { key: 'qualityMonitoring', title: 'Service quality', tone: 'quality' },
+              ].map((insight) => (
+                <article className={styles.aiRecCard} key={insight.key}>
+                  <div className={styles.aiRecTop}>
+                    <span className={[styles.aiRecPill, styles[insight.tone]].join(' ')}>{insight.title}</span>
+                  </div>
+                  <p>{aiInsights[insight.key] || 'No insight was returned for this category.'}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className={styles.aiSubtext}>Generate a summary of revenue trends, shop performance, and service completion times for this date range.</p>
+          )}
+
+          <div className={styles.askAiBox}>
+            <label className={styles.askAiHeader} htmlFor="platform-ai-question">Ask about these analytics</label>
+            <form className={styles.askAiForm} onSubmit={askAiAboutPlatform}>
+              <input
+                id="platform-ai-question"
+                className={styles.askAiInput}
+                value={aiQuestion}
+                onChange={(event) => setAiQuestion(event.target.value)}
+                maxLength={500}
+                placeholder="e.g. Which shops should I check in on this month?"
+              />
+              <button className={styles.askAiSubmit} type="submit" disabled={askingAi || !aiQuestion.trim()}>
+                {askingAi ? 'Asking…' : 'Ask Gemini'}
+              </button>
+            </form>
+            {aiAnswerError && <p className={styles.aiError} role="alert">{aiAnswerError}</p>}
+            {aiAnswer && <div className={styles.aiResponseBubble} role="status">{aiAnswer}</div>}
+          </div>
+          <p className={styles.aiSubtext}>Service value uses listed catalog prices and does not represent payment settlement.</p>
         </article>
       </section>
 

@@ -21,10 +21,15 @@ const serviceLogSchema = new mongoose.Schema(
       ref: 'Service',
       required: true,
     },
+    serviceNameAtStart: {
+      type: String,
+      trim: true,
+      default: null,
+    },
 
-    // Real server timestamps once Start/Finish Service exist (later
-    // phase). Nullable here because this phase only defines the shape —
-    // nothing writes to this collection yet.
+    // Real server timestamps from the barber's Start/Finish actions.
+    // They remain nullable for legacy or admin-completed entries that did
+    // not pass through both actions.
     startTime: {
       type: Date,
       default: null,
@@ -34,12 +39,17 @@ const serviceLogSchema = new mongoose.Schema(
       default: null,
     },
 
-    // Minutes. Deliberately NOT auto-computed by a schema hook — Section 7
-    // is explicit that (endTime - startTime) must be calculated by the
-    // service layer when Finish Service actually runs, using real
-    // server-side timestamps, not derived silently here from whatever
-    // startTime/endTime happen to be set.
+    // Active service minutes calculated by the service layer at completion
+    // from server timestamps, with paused intervals excluded.
     actualDuration: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+
+    // Catalog price copied when service begins. This is a listed service
+    // value for analytics, not a payment or settlement record.
+    priceAtStart: {
       type: Number,
       default: null,
       min: 0,

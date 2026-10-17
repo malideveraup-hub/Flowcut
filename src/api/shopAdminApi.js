@@ -10,6 +10,18 @@ export function fetchShopDashboardSummary() {
   return apiRequest('/api/shop-admin/dashboard-summary');
 }
 
+export function fetchOwnShopAnalytics() {
+  return apiRequest('/api/shop-admin/analytics');
+}
+
+export function fetchShopAiInsights(shopData) {
+  return apiRequest('/api/shop-admin/analytics/ai-insights', { method: 'POST', body: shopData });
+}
+
+export function askShopAi(question, context) {
+  return apiRequest('/api/shop-admin/analytics/ask-ai', { method: 'POST', body: { question, context } });
+}
+
 export function fetchOwnShopQueueQr() {
   return apiRequest('/api/shop-admin/qr').then((d) => ({ shop: d.shop, qr: d.qr }));
 }

@@ -71,3 +71,11 @@ export function fetchBasicAnalytics() {
 export function fetchCompletedServiceAnalytics() {
   return apiRequest('/api/admin/analytics/completed-services').then((data) => data.services);
 }
+
+export function fetchPlatformAiInsights(platformData) {
+  return apiRequest('/api/admin/analytics/ai-insights', { method: 'POST', body: platformData });
+}
+
+export function askPlatformAi(question, context) {
+  return apiRequest('/api/admin/analytics/ask-ai', { method: 'POST', body: { question, context } });
+}

@@ -66,7 +66,7 @@ export default function StaffLayout({ navItems, subtitle, superAdmin = false, ro
           </header>
         )}
 
-        <main className={[styles.main, superAdmin ? styles.mainSuperAdmin : '', pathname === '/admin' ? styles.mainDashboard : '', pathname === '/admin/queue' ? styles.mainQueue : ''].join(' ')}>
+        <main className={[styles.main, superAdmin ? styles.mainSuperAdmin : '', pathname === '/admin' ? styles.mainDashboard : '', pathname === '/admin/queue' ? styles.mainQueue : '', pathname === '/admin/analytics' ? styles.mainAnalytics : ''].join(' ')}>
           <Outlet />
         </main>
       </div>

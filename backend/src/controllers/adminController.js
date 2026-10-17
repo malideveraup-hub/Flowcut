@@ -1,4 +1,5 @@
 import * as shopService from '../services/shopService.js';
+import * as aiAnalyticsService from '../services/aiAnalyticsService.js';
 import { User, QueueEntry, ServiceLog, Shop } from '../models/index.js';
 
 export async function listAllShops(req, res, next) {
@@ -131,15 +132,43 @@ export async function completedServiceAnalytics(req, res, next) {
       return {
         shopId,
         shop: shopNames.get(shopId) || 'Unknown shop',
-        service: log.serviceId.name,
-        price: log.serviceId.price,
+        service: log.serviceNameAtStart || log.serviceId.name,
+        price: Number.isFinite(log.priceAtStart) ? log.priceAtStart : log.serviceId.price,
         status: 'completed',
         service_started: log.startTime,
         service_finished: log.endTime,
+        actual_duration: log.actualDuration,
       };
     });
 
     res.json({ success: true, data: { services } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPlatformAiInsights(req, res, next) {
+  try {
+    const platformData = req.body || {};
+    const insights = await aiAnalyticsService.generatePlatformAiInsights(platformData);
+    res.json({ success: true, data: insights });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function askPlatformAi(req, res, next) {
+  try {
+    const { question, context } = req.body || {};
+    const normalizedQuestion = typeof question === 'string' ? question.trim() : '';
+    if (!normalizedQuestion) {
+      return res.status(400).json({ success: false, message: 'A question is required.' });
+    }
+    if (normalizedQuestion.length > 500) {
+      return res.status(400).json({ success: false, message: 'Questions must be 500 characters or fewer.' });
+    }
+    const response = await aiAnalyticsService.askPlatformAi(normalizedQuestion, context || {});
+    res.json({ success: true, data: response });
   } catch (err) {
     next(err);
   }
