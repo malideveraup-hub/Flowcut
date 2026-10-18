@@ -109,6 +109,9 @@
 .chatDivider { height: 1px; margin: 12px 0 4px; background: var(--staff-line-soft); }
 .chatHeading h3 { margin: 0; color: var(--staff-ink); font-size: 13px; }
 .chatHeading p { margin: 4px 0 10px; color: var(--staff-secondary); font-size: 11px; line-height: 1.5; }
+.newChatButton { min-height: 30px; padding: 0 9px; border: 1px solid var(--brand-stone); border-radius: 7px; background: #FFFCF8; color: var(--staff-ink); font: inherit; font-size: 10px; cursor: pointer; }
+.newChatButton:hover:not(:disabled) { border-color: var(--brand-oxblood); background: #F4E8E5; }
+.newChatButton:focus-visible { outline: 2px solid var(--brand-oxblood); outline-offset: 2px; }
 .promptList { display: flex; flex-wrap: wrap; gap: 8px; }
 .promptList button { min-height: 34px; padding: 7px 10px; border: 1px solid var(--brand-stone); border-radius: 999px; background: #F7F4EE; color: var(--staff-ink); font: inherit; font-size: 11px; cursor: pointer; }
 .promptList button:hover:not(:disabled) { border-color: var(--brand-oxblood); background: #F0E2DE; }
@@ -125,6 +128,7 @@
 .assistantMessage > strong { color: var(--staff-ink); font-size: 10px; }
 .userMessage > p,
 .assistantMessage > p { margin: 5px 0 0; color: var(--staff-ink); font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.assistantMessage code { padding: 1px 4px; border-radius: 4px; background: #F2EDE7; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.95em; }
 .assistantMessage > div { margin-top: 8px; }
 .assistantMessage > div > strong { color: var(--brand-oxblood); font-size: 10px; }
 .assistantMessage ul { display: grid; gap: 4px; margin: 4px 0 0; padding-left: 17px; color: var(--staff-ink); font-size: 10.5px; line-height: 1.5; }

@@ -412,7 +412,7 @@ export async function getMyFavoriteShops(userId) {
       ...toPublicShop(shop),
       ...ratingSummaries.get(String(shop._id)),
       serviceName: serviceByShop.get(String(shop._id)) || null,
-      waitMinutes: wait.waitingCount === 0 ? 0 : wait.min,
+      waitMinutes: wait.min,
       waitingCount: wait.waitingCount,
       activeBarbers: barberCounts.get(String(shop._id)) || 0,
       distanceMiles: null,

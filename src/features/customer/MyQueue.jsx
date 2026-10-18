@@ -77,14 +77,17 @@ export default function MyQueue() {
   const barberName = entry.barberName || entry.barber?.name || null;
   const remainingMinutes = Number.isFinite(entry.wait?.remainingMinutes)
     ? entry.wait.remainingMinutes
-    : entry.wait?.min;
+    : Number.isFinite(entry.wait?.min) ? entry.wait.min : null;
+  const waitRangeLabel = Number.isFinite(entry.wait?.min) && Number.isFinite(entry.wait?.max)
+    ? `${entry.wait.min}–${entry.wait.max} min`
+    : 'Estimate unavailable';
   const waitLabel = entry.status === 'PAUSED'
-    ? `${remainingMinutes} min left when resumed`
+    ? remainingMinutes == null ? 'Estimate unavailable' : `${remainingMinutes} min left when resumed`
     : serviceActive
-    ? `${remainingMinutes} min remaining`
+    ? remainingMinutes == null ? 'Estimate unavailable' : `${remainingMinutes} min remaining`
     : entry.status === 'CALLED'
       ? 'Ready soon'
-      : `${entry.wait.min}–${entry.wait.max} min`;
+      : waitRangeLabel;
   const positionLabel = serviceActive ? 'Now' : `#${position}`;
 
   async function handleLeave() {
@@ -210,7 +213,7 @@ export default function MyQueue() {
             </div>
             <div>
               <dt>Wait range</dt>
-                <dd>{serviceActive ? `${remainingMinutes} min remaining` : `${entry.wait.min}–${entry.wait.max} min`}</dd>
+                <dd>{serviceActive ? (remainingMinutes == null ? 'Estimate unavailable' : `${remainingMinutes} min remaining`) : waitRangeLabel}</dd>
             </div>
             {entry.arrivalDeadlineAt && entry.status === 'CALLED' && (
               <div>

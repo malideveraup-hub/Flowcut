@@ -1,8 +1,9 @@
 import { AppError } from '../middleware/errorHandler.js';
 import { getOwnShopAnalytics } from './analyticsService.js';
+import { GoogleGenAI } from '@google/genai';
 
-const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const REQUEST_TIMEOUT_MS = 25_000;
+const RETRY_OPTIONS = { attempts: 2, initialDelay: 0.4, maxDelay: 1, jitter: 0.2, httpStatusCodes: [408, 429, 500, 502, 503, 504] };
 
 const insightSchema = {
   type: 'OBJECT',
@@ -46,44 +47,66 @@ export function analyticsForModel(analytics) {
   };
 }
 
-function providerMessage(error) {
-  const status = error?.status;
+function providerStatus(error) {
+  const status = Number(error?.status ?? error?.response?.status);
+  return Number.isInteger(status) ? status : null;
+}
+
+function providerMessage(status) {
   if (status === 429) return 'Gemini is temporarily rate limited. Please try again in a few minutes.';
   if (status === 401 || status === 403) return 'Gemini could not authorize this request. Check the backend Gemini API key.';
+  if (status === 404) return 'The configured Gemini model is unavailable to this API key. Check the backend GEMINI_MODEL setting.';
+  if (status === 400) return 'Gemini rejected the analytics request. Check the model and structured-response configuration.';
   return 'Gemini insights are temporarily unavailable. Your regular analytics are still available.';
 }
 
-export async function requestGeminiJson({ prompt, schema, apiKey, model, fetchImpl = globalThis.fetch, maxOutputTokens = 1600 }) {
-  let response;
+export function createGeminiClient(apiKey, fetchImpl = globalThis.fetch) {
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: { timeout: REQUEST_TIMEOUT_MS, retryOptions: RETRY_OPTIONS, fetch: fetchImpl },
+  });
+}
+
+export async function requestGeminiJson({ prompt, schema, apiKey, model, clientFactory, fetchImpl = globalThis.fetch, maxOutputTokens = 1600 }) {
+  if (typeof model !== 'string' || !/^[a-zA-Z0-9._-]{1,100}$/.test(model)) {
+    throw new AppError(503, 'The configured Gemini model name is invalid. Check the backend GEMINI_MODEL setting.');
+  }
+  const makeClient = clientFactory || ((key) => createGeminiClient(key, fetchImpl));
+  let result;
   try {
-    response = await fetchImpl(`${GEMINI_ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        contents: Array.isArray(prompt) ? prompt : [{ parts: [{ text: prompt }] }],
-        ...(schema.systemInstruction ? { systemInstruction: { parts: [{ text: schema.systemInstruction }] } } : {}),
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: schema.responseSchema,
-          maxOutputTokens,
-          temperature: 0.2,
-        },
-      }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    const client = makeClient(apiKey);
+    result = await client.models.generateContent({
+      model,
+      contents: Array.isArray(prompt) ? prompt : [{ parts: [{ text: prompt }] }],
+      config: {
+        ...(schema.systemInstruction ? { systemInstruction: schema.systemInstruction } : {}),
+        responseMimeType: 'application/json',
+        responseSchema: schema.responseSchema,
+        maxOutputTokens,
+        temperature: 0.2,
+      },
     });
-  } catch {
-    throw new AppError(503, 'Gemini insights are temporarily unavailable. Your regular analytics are still available.');
+  } catch (error) {
+    const status = providerStatus(error);
+    console.warn('[analytics-gemini] request_failed', {
+      model,
+      status,
+      errorType: typeof error?.name === 'string' ? error.name.slice(0, 60) : 'Error',
+    });
+    throw new AppError(status === 429 || status == null || status >= 500 ? 503 : 502, providerMessage(status));
   }
 
-  if (!response.ok) {
-    const message = providerMessage({ status: response.status });
-    throw new AppError(response.status === 429 ? 503 : 502, message);
+  const finishReason = result?.candidates?.[0]?.finishReason;
+  if (result?.promptFeedback?.blockReason || finishReason === 'SAFETY') {
+    throw new AppError(422, 'Gemini could not answer this message because its safety filters blocked it. Rephrase the request and try again.');
+  }
+  if (finishReason === 'MAX_TOKENS') {
+    throw new AppError(502, 'Gemini response was too long to process. Please ask a narrower question.');
   }
 
   try {
-    const body = await response.json();
-    const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('');
-    return JSON.parse(text);
+    if (typeof result?.text !== 'string' || !result.text.trim()) throw new Error('Empty model response');
+    return JSON.parse(result.text);
   } catch {
     throw new AppError(502, 'Gemini returned an unreadable response. Please try again.');
   }
@@ -91,14 +114,15 @@ export async function requestGeminiJson({ prompt, schema, apiKey, model, fetchIm
 
 export function createAnalyticsInsightsService({
   readAnalytics = getOwnShopAnalytics,
-  fetchImpl = globalThis.fetch,
+  clientFactory,
   apiKey = () => process.env.GEMINI_API_KEY,
   model = () => process.env.GEMINI_MODEL || 'gemini-3.8-flash',
 } = {}) {
   return async function generateOwnShopAnalyticsInsights(shopId, filters = {}) {
     const resolvedApiKey = typeof apiKey === 'function' ? apiKey() : apiKey;
-    const resolvedModel = typeof model === 'function' ? model() : model;
+    const resolvedModel = String(typeof model === 'function' ? model() || '' : model || '').trim();
     if (!resolvedApiKey) {
+      console.warn('[analytics-gemini] missing_configuration', { variable: 'GEMINI_API_KEY' });
       throw new AppError(503, 'AI analytics are not configured. Add GEMINI_API_KEY to the backend environment.');
     }
 
@@ -119,7 +143,7 @@ export function createAnalyticsInsightsService({
       schema: { responseSchema: insightSchema },
       apiKey: resolvedApiKey,
       model: resolvedModel,
-      fetchImpl,
+      clientFactory,
     });
     if (!result || typeof result.summary !== 'string' || !Array.isArray(result.insights) || !Array.isArray(result.limitations)) {
       throw new AppError(502, 'Gemini returned an unreadable response. Please try again.');

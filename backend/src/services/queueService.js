@@ -1,10 +1,10 @@
 import { validateName } from '../validation/authValidation.js';
-import { QueueEntry, Service, ServiceLog, User } from '../models/index.js';
+import { QueueEntry, Service, ServiceLog, User, WaitingEstimate } from '../models/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { isValidObjectId } from '../utils/mongoId.js';
 import { computeLiveWaitEstimate, computeQueueWaitEstimate } from '../utils/waitEstimate.js';
 import { toPublicQueueEntry, toStaffQueueEntry } from '../utils/publicSerializers.js';
-import { canTransition, ACTIVE_QUEUE_STATUSES, validateDelayMinutes, validateRequestId } from '../validation/queueValidation.js';
+import { canApplyDelay, canTransition, ACTIVE_QUEUE_STATUSES, validateDelayMinutes, validateRequestId } from '../validation/queueValidation.js';
 import { expireCalledQueueEntry, notifyQueueEntry, reconcileShopQueue } from './queueNotificationService.js';
 import Shop from '../models/Shop.js';
 import Barber from '../models/Barber.js';
@@ -24,6 +24,24 @@ async function requireActiveService(shopId, serviceId) {
     throw new AppError(400, 'Select a valid, active service for this shop.', { serviceId: 'Invalid service.' });
   }
   return service;
+}
+
+async function recordInitialWaitEstimate(entry) {
+  try {
+    const calculatedAt = new Date();
+    const estimate = await computeQueueWaitEstimate(entry.shopId, entry, calculatedAt);
+    if (!Number.isFinite(estimate.min) || !Number.isFinite(estimate.max)) return;
+    await WaitingEstimate.create({
+      queueEntryId: entry._id,
+      estimatedMin: estimate.min,
+      estimatedMax: estimate.max,
+      calculatedAt,
+    });
+  } catch {
+    // Recording an analytics snapshot must not turn a successful queue join
+    // into a failed request after the queue entry has already been created.
+    console.warn('[wait-estimate] initial_snapshot_failed');
+  }
 }
 
 async function requireApprovedShop(shopId) {
@@ -66,6 +84,7 @@ export async function joinQueue(customerId, shopId, serviceId) {
     status: 'WAITING',
     queuePosition,
   });
+  await recordInitialWaitEstimate(entry);
   await reconcileShopQueue(shopId);
   return entry;
 }
@@ -488,6 +507,7 @@ export async function addWalkIn(shopId, { serviceId, walkInName }) {
     status: 'WAITING',
     queuePosition,
   });
+  await recordInitialWaitEstimate(entry);
   await reconcileShopQueue(shopId);
   return entry;
 }
@@ -864,7 +884,7 @@ export async function applyDelay(shopId, barberId, entryId, minutes, requestId) 
   const priorReceipt = findActionReceipt(entry, requestId, 'extend', Number(minutes));
   if (priorReceipt) return { entry, minutes: priorReceipt.minutes, replayed: true };
   requireAssignedBarber(entry, barberId);
-  if (!canTransition(entry.status, 'DELAYED')) {
+  if (!canApplyDelay(entry.status) || !canTransition(entry.status, 'DELAYED')) {
     throw new AppError(409, 'Delays can only be applied to a service in progress.');
   }
 

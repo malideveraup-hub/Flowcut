@@ -33,6 +33,13 @@ export function canTransition(fromStatus, toStatus) {
   return (QUEUE_TRANSITIONS[fromStatus] || []).includes(toStatus);
 }
 
+// Applying another delay is an action allowed only while service work is
+// actively running. PAUSED -> DELAYED remains a valid resume transition
+// when pausedFromStatus records a previously delayed service.
+export function canApplyDelay(status) {
+  return status === 'IN_SERVICE' || status === 'DELAYED';
+}
+
 // A customer is considered to have an "active" queue entry (blocking a
 // second join anywhere) if it's in any of these statuses.
 export const ACTIVE_QUEUE_STATUSES = ['JOINED', 'WAITING', 'CALLED', 'IN_SERVICE', 'DELAYED', 'PAUSED'];

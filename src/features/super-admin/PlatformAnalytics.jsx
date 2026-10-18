@@ -103,7 +103,7 @@ export default function PlatformAnalytics() {
 
   return <main className={styles.analytics}>
     <header className={styles.head}>
-      <div><p className={styles.eyebrow}>FLOWCUT PLATFORM</p><h1>Platform analytics</h1><p className={styles.sub}>Platform-wide operations for {range.from} through {range.to} (UTC).</p></div>
+      <div><p className={styles.eyebrow}>FLOWCUT PLATFORM</p><h1>Platform analytics</h1><p className={styles.sub}>Platform operations and current-price revenue estimates for {range.from} through {range.to} (UTC).</p></div>
       <div className={styles.actions}>
         {PRESETS.map(([key, label, days]) => <button key={key} className={`${styles.button} ${range.key === key ? styles.primary : ''}`} type="button" onClick={() => choosePreset(key, days)}>{label}</button>)}
       </div>
@@ -120,7 +120,7 @@ export default function PlatformAnalytics() {
       <article className={styles.stat}><div className={styles.statTop}>Total registered shops</div><strong>{data.stats.totalRegisteredShops.toLocaleString()}</strong><small>{Object.entries(data.stats.shopsByStatus).map(([status, count]) => `${status.toLowerCase()}: ${count}`).join(' · ') || 'No shop records'}</small></article>
       <article className={styles.stat}><div className={styles.statTop}>Active shops</div><strong>{current.activeShopCount.toLocaleString()}</strong><small>At least one completed service log in this period</small></article>
       <article className={styles.stat}><div className={styles.statTop}>Completed services</div><strong>{current.completedServiceCount.toLocaleString()}</strong><small>{current.completedVisitCount.toLocaleString()} completed queue visits</small></article>
-      <article className={styles.stat}><div className={styles.statTop}>Platform revenue</div><strong>{formatMoney(current.revenue)}</strong><small>{formatChange(change)}</small></article>
+      <article className={styles.stat}><div className={styles.statTop}>Revenue estimate</div><strong>{formatMoney(current.revenue)}</strong><small>Current catalog prices · {formatChange(change)}</small></article>
       <article className={styles.stat}><div className={styles.statTop}>Average actual wait</div><strong>{formatMinutes(current.averageWaitMinutes)}</strong><small>{current.waitSampleCount} valid service-start samples</small></article>
       <article className={styles.stat}><div className={styles.statTop}>Valid service duration</div><strong>{formatMinutes(current.averageDurationMinutes)}</strong><small>{durationTotal} valid; {current.durationExcludedCount} excluded</small></article>
     </section>
@@ -136,7 +136,7 @@ export default function PlatformAnalytics() {
       <article className={styles.panel}><div className={styles.panelHead}><div><h2>Shop activity</h2><p>{displayed.length ? `${rankings.length} active shops ranked by completed service revenue` : 'Active shops require at least one valid completed service log.'}</p></div>{rankings.length > 5 && <button type="button" className={styles.linkButton} onClick={() => setShowAllShops((value) => !value)}>{showAllShops ? 'Show less' : 'Show more'}</button>}</div>
         {displayed.length ? <div className={styles.rankings}>{displayed.map((shop, index) => { const shopChange = percentChange(shop.revenue, shop.previousRevenue); return <div className={styles.ranking} key={shop.shopId}><span className={styles.rank}>#{index + 1}</span><div className={styles.shopInfo}><strong>{shop.shopName}</strong><small>{formatMoney(shop.revenue)} · {shop.completedServiceCount} services</small></div><span className={styles.shopGrowth}>{formatChange(shopChange)}</span></div>; })}</div> : <p className={styles.empty}>No active shops in this period.</p>}
       </article>
-      <article className={styles.panel}><div className={styles.panelHead}><div><h2>Services across shops</h2><p>Completed service logs and associated revenue</p></div></div>
+      <article className={styles.panel}><div className={styles.panelHead}><div><h2>Services across shops</h2><p>Completed service logs · revenue estimated from current service prices</p></div></div>
         {data.serviceTotals.length ? <div className={styles.serviceRows}>{data.serviceTotals.slice(0, 8).map((service) => <div key={service.serviceName} title={`${service.serviceName}: ${service.completedCount} completed; ${formatMoney(service.revenue)}`}><span>{service.serviceName}</span><i><b style={{ width: `${service.completedCount / maxService * 100}%` }} /></i><strong>{service.completedCount}</strong><small>{formatMoney(service.revenue)}</small></div>)}</div> : <p className={styles.empty}>No completed service records in this period.</p>}
       </article>
     </section>
@@ -146,5 +146,6 @@ export default function PlatformAnalytics() {
     </section>
 
     <p className={styles.note}>Current platform snapshot: {data.stats.activeQueueEntries} active queue entries across {totalUsers.toLocaleString()} registered users. Queue status history is not stored; completions and cancellations are grouped by the queue entry’s final status timestamp, so a visit that changed status more than once cannot be reconstructed historically. Active shop means at least one completed service log in the selected UTC period. Ratings recorded in this period: {data.ratings.count}{data.ratings.average == null ? '' : ` (average ${Number(data.ratings.average).toFixed(1)} / 5)`}.</p>
+    <p className={styles.note}>Revenue is an estimate using current catalog prices; historical service prices are not stored.</p>
   </main>;
 }

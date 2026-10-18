@@ -2,10 +2,30 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   canTransition,
+  canApplyDelay,
   validateDelayMinutes,
   validateRequestId,
 } from '../src/validation/queueValidation.js';
-import { calculateAssignedQueueWaitEstimate } from '../src/utils/waitEstimate.js';
+import { calculateAssignedQueueWaitEstimate, calculateShopWaitRange } from '../src/utils/waitEstimate.js';
+
+test('shop wait ranges include active service work and pause time, and avoid estimates with no active barbers', () => {
+  const now = new Date('2026-10-18T10:30:00.000Z');
+  const waitRange = calculateShopWaitRange({
+    waitingEntries: [{ serviceId: 'next', baseMinutes: 20 }],
+    activeEntries: [{ _id: 'current', serviceId: 'current', baseMinutes: 40, delayMinutes: 5, pausedAt: new Date('2026-10-18T10:20:00.000Z'), pausedDurationMs: 0 }],
+    durationById: new Map(),
+    startedAtByEntryId: new Map([['current', new Date('2026-10-18T10:00:00.000Z')]]),
+    activeBarberCount: 1,
+    now,
+  });
+  assert.deepEqual(waitRange, { min: 45, max: 59 });
+  assert.deepEqual(calculateShopWaitRange({
+    waitingEntries: [], activeEntries: [], durationById: new Map(), startedAtByEntryId: new Map(), activeBarberCount: 0, now,
+  }), { min: 0, max: 0 });
+  assert.deepEqual(calculateShopWaitRange({
+    waitingEntries: [{ serviceId: 'next' }], activeEntries: [], durationById: new Map(), startedAtByEntryId: new Map(), activeBarberCount: 0, now,
+  }), { min: null, max: null });
+});
 
 test('a running-late service can record another delay and then finish', () => {
   assert.equal(canTransition('IN_SERVICE', 'DELAYED'), true);
@@ -13,8 +33,12 @@ test('a running-late service can record another delay and then finish', () => {
   assert.equal(canTransition('DELAYED', 'COMPLETED'), true);
 });
 
-test('paused and completed services cannot receive another delay', () => {
-  assert.equal(canTransition('PAUSED', 'DELAYED'), false);
+test('only active services can receive another delay while a paused delayed service can resume', () => {
+  assert.equal(canApplyDelay('IN_SERVICE'), true);
+  assert.equal(canApplyDelay('DELAYED'), true);
+  assert.equal(canApplyDelay('PAUSED'), false);
+  assert.equal(canApplyDelay('COMPLETED'), false);
+  assert.equal(canTransition('PAUSED', 'DELAYED'), true);
   assert.equal(canTransition('COMPLETED', 'DELAYED'), false);
 });
 

@@ -5,44 +5,52 @@ import { DEFAULT_SERVICE_MINUTES } from '../config/queueConfig.js';
 
 /**
  * Computes a live estimated wait RANGE for a shop from its CURRENT queue
- * state — number waiting, each of their services' estimatedDuration, and
- * how many barbers are currently available to work.
- *
- * This is deliberately simple, real-time arithmetic, not a prediction
- * model: it is recomputed from scratch on every call, uses no historical
- * data, and stores nothing. Phase 5 owns ServiceLog-based historical
- * averaging, persisted WaitingEstimate records, and prediction-accuracy
- * tracking — none of that exists here. This is the same class of formula
- * the pre-backend frontend mock used, now computed from real MongoDB data
- * instead of an in-memory array.
+ * state, including queued services, active work, delays, pauses, and active
+ * barber capacity. This is operational arithmetic, not a prediction model.
+ * The calculation itself is read-only. Queue-entry creation records one
+ * initial estimate snapshot so later descriptive accuracy analysis can use
+ * real historical estimates; legacy entries without one remain unscored.
  */
 export async function computeLiveWaitEstimate(shopId) {
-  const [waitingEntries, activeBarberCount] = await Promise.all([
-    QueueEntry.find({ shopId, status: 'WAITING' }).select('serviceId'),
+  const [waitingEntries, activeEntries, activeBarberCount] = await Promise.all([
+    QueueEntry.find({ shopId, status: { $in: ['JOINED', 'WAITING', 'CALLED'] } }).select('serviceId baseMinutes'),
+    QueueEntry.find({ shopId, status: { $in: SERVICE_IN_PROGRESS_STATUSES } })
+      .select('serviceId baseMinutes delayMinutes pausedAt pausedDurationMs'),
     Barber.countDocuments({ shopId, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'BUSY'] } }),
   ]);
 
-  const barbers = Math.max(activeBarberCount, 1); // avoid divide-by-zero when no barber is marked active
+  const activeIds = activeEntries.map((entry) => entry._id);
+  const serviceIds = [...new Set([...waitingEntries, ...activeEntries].map((entry) => String(entry.serviceId)))];
+  const [services, serviceLogs] = await Promise.all([
+    Service.find({ _id: { $in: serviceIds } }).select('_id estimatedDuration'),
+    activeIds.length
+      ? ServiceLog.find({ queueEntryId: { $in: activeIds } }).select('queueEntryId startTime')
+      : [],
+  ]);
+  const durationById = new Map(services.map((service) => [String(service._id), service.estimatedDuration]));
+  const startedAtByEntryId = new Map(serviceLogs.map((log) => [String(log.queueEntryId), log.startTime]));
+  const range = calculateShopWaitRange({ waitingEntries, activeEntries, durationById, startedAtByEntryId, activeBarberCount, now: new Date() });
+  return { ...range, waitingCount: waitingEntries.length };
+}
 
-  if (waitingEntries.length === 0) {
-    return { min: 5, max: 10, waitingCount: 0 };
-  }
+export function calculateShopWaitRange({ waitingEntries, activeEntries, durationById, startedAtByEntryId, activeBarberCount, now }) {
+  const totalEntries = [...waitingEntries, ...activeEntries];
+  if (!totalEntries.length) return { min: 0, max: 0 };
+  if (!activeBarberCount) return { min: null, max: null };
 
-  const serviceIds = [...new Set(waitingEntries.map((e) => String(e.serviceId)))];
-  const services = await Service.find({ _id: { $in: serviceIds } }).select('estimatedDuration');
-  const durationById = new Map(services.map((s) => [String(s._id), s.estimatedDuration]));
-  const fallbackDuration =
-    services.length > 0 ? services.reduce((sum, s) => sum + s.estimatedDuration, 0) / services.length : 25;
-
-  const totalMinutes = waitingEntries.reduce((sum, entry) => {
-    const duration = durationById.get(String(entry.serviceId)) ?? fallbackDuration;
-    return sum + duration;
+  const durationFor = (entry) => entry.baseMinutes || durationById.get(String(entry.serviceId)) || DEFAULT_SERVICE_MINUTES;
+  const waitingMinutes = waitingEntries.reduce((sum, entry) => sum + durationFor(entry), 0);
+  const activeMinutes = activeEntries.reduce((sum, entry) => {
+    const startedAt = startedAtByEntryId.get(String(entry._id));
+    const pausedMs = (Number(entry.pausedDurationMs) || 0)
+      + (entry.pausedAt ? Math.max(0, now - new Date(entry.pausedAt)) : 0);
+    const elapsed = startedAt
+      ? Math.max(0, (now - new Date(startedAt) - pausedMs) / 60000)
+      : 0;
+    return sum + Math.max(0, durationFor(entry) + (entry.delayMinutes || 0) - elapsed);
   }, 0);
-
-  const min = Math.max(5, Math.round(totalMinutes / barbers));
-  const max = Math.max(min + 5, Math.round(min * 1.3));
-
-  return { min, max, waitingCount: waitingEntries.length };
+  const min = Math.max(0, Math.ceil((waitingMinutes + activeMinutes) / activeBarberCount));
+  return { min, max: min === 0 ? 0 : Math.max(min + 5, Math.ceil(min * 1.3)) };
 }
 
 const ACTIVE_QUEUE_STATUSES = ['JOINED', 'WAITING', 'CALLED', 'IN_SERVICE', 'DELAYED', 'PAUSED'];
@@ -100,11 +108,12 @@ export async function computeQueueWaitEstimate(shopId, entry, now = new Date()) 
   if (entry.status === 'CALLED') return { min: 0, max: 0, remainingMinutes: 0 };
 
   if (entry.barberId) {
-    const barberEntries = await QueueEntry.find({
-      shopId,
-      barberId: entry.barberId,
-      status: { $in: ACTIVE_QUEUE_STATUSES },
-    }).select('_id serviceId status queuePosition delayMinutes baseMinutes pausedAt pausedDurationMs');
+    const [assignedBarber, barberEntries] = await Promise.all([
+      Barber.findOne({ _id: entry.barberId, shopId, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'BUSY'] } }).select('_id'),
+      QueueEntry.find({ shopId, barberId: entry.barberId, status: { $in: ACTIVE_QUEUE_STATUSES } })
+        .select('_id serviceId status queuePosition delayMinutes baseMinutes pausedAt pausedDurationMs'),
+    ]);
+    if (!assignedBarber) return { min: null, max: null, remainingMinutes: null };
 
     const serviceIds = [...new Set(barberEntries.map((item) => String(item.serviceId)))];
     const [services, serviceLogs] = await Promise.all([
@@ -140,6 +149,8 @@ export async function computeQueueWaitEstimate(shopId, entry, now = new Date()) 
     Barber.countDocuments({ shopId, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'BUSY'] } }),
   ]);
 
+  if (!activeBarberCount) return { min: null, max: null, remainingMinutes: null };
+
   const entries = [...entriesAhead, ...activeServices];
   const serviceIds = [...new Set(entries.map((item) => String(item.serviceId)))];
   const [services, serviceLogs] = await Promise.all([
@@ -166,9 +177,8 @@ export async function computeQueueWaitEstimate(shopId, entry, now = new Date()) 
     return total + Math.max(0, duration - elapsed + (item.delayMinutes || 0));
   }, 0);
 
-  const barbers = Math.max(activeBarberCount, 1);
-  const min = Math.max(5, Math.ceil(totalMinutes / barbers));
-  return { min, max: Math.max(min + 5, Math.ceil(min * 1.3)), remainingMinutes: min };
+  const min = Math.max(0, Math.ceil(totalMinutes / activeBarberCount));
+  return { min, max: min === 0 ? 0 : Math.max(min + 5, Math.ceil(min * 1.3)), remainingMinutes: min };
 }
 
 export const computeCustomerWaitEstimate = computeQueueWaitEstimate;

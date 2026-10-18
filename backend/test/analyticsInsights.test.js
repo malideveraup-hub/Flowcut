@@ -4,7 +4,7 @@ import express from 'express';
 import { test } from 'node:test';
 import { createOwnShopAnalyticsInsightsHandler } from '../src/controllers/analyticsController.js';
 import { analyticsInsightsLimiter } from '../src/middleware/rateLimiters.js';
-import { createAnalyticsInsightsService } from '../src/services/analyticsInsightsService.js';
+import { createAnalyticsInsightsService, requestGeminiJson } from '../src/services/analyticsInsightsService.js';
 
 const shopId = '68a000000000000000000001';
 const analytics = {
@@ -32,6 +32,42 @@ const modelResponse = {
   limitations: ['Only 12 valid wait observations are available.'],
 };
 
+test('installed Gemini SDK uses the supported GenerateContent request and retries transient provider errors once', async () => {
+  let attempts = 0;
+  let captured;
+  const result = await requestGeminiJson({
+    prompt: [{ role: 'user', parts: [{ text: 'Check supported aggregates.' }] }],
+    schema: { responseSchema: { type: 'OBJECT', properties: { answer: { type: 'STRING' } }, required: ['answer'] } },
+    apiKey: 'test-only-key',
+    model: 'gemini-3.8-flash',
+    fetchImpl: async (url, init) => {
+      attempts += 1;
+      captured = { url: String(url), init };
+      if (attempts === 1) return new Response(JSON.stringify({ error: { message: 'temporary' } }), { status: 503 });
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"answer":"grounded"}' }] } }] }), { status: 200 });
+    },
+  });
+  assert.equal(result.answer, 'grounded');
+  assert.equal(attempts, 2);
+  assert.match(captured.url, /models\/gemini-3\.8-flash:generateContent$/);
+  assert.equal(new Headers(captured.init.headers).get('x-goog-api-key'), 'test-only-key');
+  const body = JSON.parse(captured.init.body);
+  assert.equal(body.contents[0].parts[0].text, 'Check supported aggregates.');
+  assert.equal(body.generationConfig.responseMimeType, 'application/json');
+  assert.equal(body.generationConfig.responseSchema.properties.answer.type, 'STRING');
+
+  let permanentFailureAttempts = 0;
+  await assert.rejects(requestGeminiJson({
+    prompt: 'test', schema: { responseSchema: { type: 'OBJECT' } },
+    apiKey: 'test-only-key', model: 'gemini-3.8-flash',
+    fetchImpl: async () => {
+      permanentFailureAttempts += 1;
+      return new Response(JSON.stringify({ error: { message: 'invalid key' } }), { status: 403 });
+    },
+  }), { statusCode: 502 });
+  assert.equal(permanentFailureAttempts, 1);
+});
+
 test('Gemini receives only aggregate shop analytics and returns structured insight data', async () => {
   let receivedShopId;
   let receivedFilters;
@@ -44,20 +80,24 @@ test('Gemini receives only aggregate shop analytics and returns structured insig
       receivedFilters = filters;
       return analytics;
     },
-    fetchImpl: async (url, options) => {
-      request = { url, options };
-      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(modelResponse) }] } }] }) };
+    clientFactory: (key) => {
+      assert.equal(key, 'test-key');
+      return { models: { generateContent: async (options) => {
+        request = options;
+        return { text: JSON.stringify(modelResponse) };
+      } } };
     },
   });
 
   const filters = { from: '2026-10-01', to: '2026-10-07', serviceId: 'service-filter', shopId: 'untrusted-client-shop' };
   const result = await generate(shopId, filters);
-  const prompt = JSON.parse(request.options.body).contents[0].parts[0].text;
+  const prompt = request.contents[0].parts[0].text;
 
   assert.equal(receivedShopId, shopId);
   assert.equal(receivedFilters, filters);
-  assert.match(request.url, /test-model:generateContent$/);
-  assert.equal(request.options.headers['x-goog-api-key'], 'test-key');
+  assert.equal(request.model, 'test-model');
+  assert.equal(request.config.responseMimeType, 'application/json');
+  assert.equal(request.config.maxOutputTokens, 1600);
   assert.match(prompt, /Classic cut/);
   assert.doesNotMatch(prompt, /must-not-be-sent|private@example\.test|customerId|customerEmail/);
   assert.deepEqual(result.insights, modelResponse.insights);
@@ -79,15 +119,28 @@ test('Gemini provider failures and malformed responses become safe application e
   const base = { apiKey: 'test-key', readAnalytics: async () => analytics };
   const unavailable = createAnalyticsInsightsService({
     ...base,
-    fetchImpl: async () => ({ ok: false, status: 429 }),
+    clientFactory: () => ({ models: { generateContent: async () => { throw Object.assign(new Error('quota'), { status: 429 }); } } }),
   });
   await assert.rejects(unavailable(shopId, {}), { statusCode: 503, message: /rate limited/ });
 
   const malformed = createAnalyticsInsightsService({
     ...base,
-    fetchImpl: async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'not json' }] } }] }) }),
+    clientFactory: () => ({ models: { generateContent: async () => ({ text: 'not json' }) } }),
   });
   await assert.rejects(malformed(shopId, {}), { statusCode: 502, message: /unreadable response/ });
+});
+
+test('Gemini safety blocks and token limits return clear safe errors', async () => {
+  const schema = { responseSchema: { type: 'OBJECT' } };
+  const safety = async () => ({ promptFeedback: { blockReason: 'SAFETY' } });
+  await assert.rejects(requestGeminiJson({
+    prompt: 'test', schema, apiKey: 'test-key', model: 'gemini-3.8-flash',
+    clientFactory: () => ({ models: { generateContent: safety } }),
+  }), { statusCode: 422, message: /safety filters blocked it/ });
+  await assert.rejects(requestGeminiJson({
+    prompt: 'test', schema, apiKey: 'test-key', model: 'gemini-3.8-flash',
+    clientFactory: () => ({ models: { generateContent: async () => ({ candidates: [{ finishReason: 'MAX_TOKENS' }] }) } }),
+  }), { statusCode: 502, message: /response was too long/ });
 });
 
 test('insight controller uses the authenticated shop id and request filters', async () => {

@@ -67,11 +67,11 @@ The forgot-password response is intentionally the same for registered and unregi
 
 ## Shop analytics AI insights
 
-The Shop Admin Analytics page has an optional, filter-aware conversational assistant powered by the Gemini API. Configure `GEMINI_API_KEY` in the backend environment; `GEMINI_MODEL` is optional and defaults to `gemini-3.8-flash`. Keep the key only in backend environment settings, never in frontend variables. Chat is limited to 24 messages per shop per 15 minutes. Chat history is kept in the browser session and only the eight most recent turns are sent for context.
+The Shop Admin Analytics page has an optional, filter-aware conversational assistant powered by Google's `@google/genai` SDK and the Gemini API. Copy `backend/.env.example` to `backend/.env`, then set `GEMINI_API_KEY` using a key from Google AI Studio. `GEMINI_MODEL` is optional and defaults to `gemini-3.8-flash`; the installed SDK calls `models.generateContent` with JSON response schema and bounded transient retries. Keep the key only in backend environment settings, never in frontend variables. Chat is limited to 24 messages per shop per 15 minutes. Chat history is kept in the browser session and only the eight most recent turns are sent for context. The assistant can discuss the current shop's aggregates, documented FlowCut behavior, or clearly labeled general barbershop guidance. Prior assistant messages are context only; current metric claims must be supported by current aggregate data.
 
 When a shop admin uses the assistant, FlowCut sends the selected shop's filtered aggregate analytics (traffic, wait and service summaries, and service/barber aggregates) plus recent chat messages to Google Gemini. It does not send individual queue records or customer identity details. The normal analytics dashboard remains available if Gemini is unconfigured or temporarily unavailable. Gemini suggestions may be inaccurate and should be checked against later shop results.
 
-Service-duration analytics prefer a valid saved `actualDuration`, then use elapsed start-to-finish timestamps when the saved value is missing or rejected. Values outside the service-specific limit (twice its expected duration, with a 30-minute minimum allowance) or the global cap are excluded. Set `FLOWCUT_ANALYTICS_MAX_DURATION_MINUTES` in the backend environment to change the global cap; it defaults to 180 minutes and cannot exceed 480. The dashboard reports excluded samples and does not change stored records.
+Service-duration analytics prefer a valid saved `actualDuration`, then use elapsed start-to-finish timestamps when the saved value is missing or rejected. Values outside the service-specific limit (twice its expected duration, with a 30-minute minimum allowance) or the global cap are excluded. Set `FLOWCUT_ANALYTICS_MAX_DURATION_MINUTES` in the backend environment to change the global cap; it defaults to 180 minutes and cannot exceed 480. The dashboard reports excluded samples and does not change stored records. Queue creation saves one initial waiting-range snapshot; estimate-accuracy metrics compare the first valid snapshot recorded at or after queue entry with actual queue-entry-to-service-start wait. They remain unavailable for legacy visits without a saved snapshot.
 
 The Super Admin Platform Analytics endpoint (`GET /api/admin/analytics/platform`) is protected by the admin router's `requireAuth` and `requireRole('super_admin')` middleware. It requires inclusive `from` and `to` dates in `YYYY-MM-DD` UTC format and limits a report to 366 days. Active shops have at least one valid completed service log in the selected period. Queue joins use `createdAt`; completed and cancelled counts use the current final stored status and `updatedAt`, because status transition history is not persisted. Actual waits use queue `createdAt` to service-log `startTime` and exclude reversed, invalid, or greater-than-24-hour samples. Revenue uses the service's currently stored price because price-at-completion snapshots are not stored. Platform reports contain aggregates only and do not return customer or queue-entry records.
 
@@ -488,7 +488,7 @@ WAITING    -> CALLED, IN_SERVICE, SKIPPED, CANCELLED
 CALLED     -> IN_SERVICE, SKIPPED, CANCELLED
 IN_SERVICE -> DELAYED, PAUSED, COMPLETED
 DELAYED    -> IN_SERVICE, DELAYED, COMPLETED
-PAUSED     -> IN_SERVICE, COMPLETED
+PAUSED     -> IN_SERVICE, DELAYED (resume a previously delayed service), COMPLETED
 SKIPPED    -> WAITING, CANCELLED
 COMPLETED, CANCELLED -> (terminal)
 ```
@@ -499,7 +499,9 @@ customer" step — it goes straight from an idle/next-up card to Start
 Service. `CALLED` remains modeled for a future "call next" feature.
 `DELAY` transitions the entry to `DELAYED` and accumulates
 `QueueEntry.delayMinutes`; further delay reports can be added while the
-entry is already delayed, and a barber can still `FINISH` directly. The
+entry is already delayed, but the delay action is rejected while paused. A
+paused delayed service resumes to `DELAYED`; a normally paused service
+resumes to `IN_SERVICE`. A barber can still `FINISH` directly. The
 live customer wait estimate includes that accumulated delay. Enforced with
 `canTransition()` before every write — a
 completed/cancelled entry can never be reopened, verified via curl and

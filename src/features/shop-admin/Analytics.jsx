@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { askOwnShopAnalyticsAssistant, fetchOwnShop, fetchOwnShopAnalytics } from '../../api/shopAdminApi';
 import DropdownSelect from '../../components/ui/DropdownSelect';
 import EmptyState from '../../components/ui/EmptyState';
@@ -14,9 +14,9 @@ const HOUR_LABELS = Array.from({ length: 24 }, (_, hour) => (
   `${hour % 12 || 12}${hour < 12 ? 'a' : 'p'}`
 ));
 const SUGGESTED_PROMPTS = [
-  'When should I schedule another barber?',
+  'How is my shop doing this week?',
   'Why are waits longer today?',
-  'What should I improve this week?',
+  'What can FlowCut do for my shop?',
 ];
 
 function utcDateString(date) {
@@ -59,6 +59,15 @@ function assistantHistoryText(content) {
     .flatMap((group) => content[group] || [])
     .map((item) => `${item.text} ${item.evidence.map((source) => `${source.label}: ${source.value}`).join('; ')}`)
     .join(' ');
+}
+
+function AssistantText({ children }) {
+  const parts = String(children).split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean);
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('`') && part.endsWith('`')) return <code key={index}>{part.slice(1, -1)}</code>;
+    return <span key={index}>{part}</span>;
+  });
 }
 
 function DateTrafficChart({ daily, onSelectDay }) {
@@ -201,6 +210,7 @@ export default function Analytics() {
   const [chatError, setChatError] = useState('');
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [lastChatMessage, setLastChatMessage] = useState('');
+  const chatTranscriptRef = useRef(null);
   const { data: shop, loading: shopLoading, error: shopError, refetch: refetchShop } = useAsync(fetchOwnShop);
   const {
     data: analytics,
@@ -220,6 +230,12 @@ export default function Analytics() {
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [assistantOpen]);
+
+  useEffect(() => {
+    if (assistantOpen && chatTranscriptRef.current) {
+      chatTranscriptRef.current.scrollTop = chatTranscriptRef.current.scrollHeight;
+    }
+  }, [assistantOpen, chatMessages, chatLoading]);
 
   function updateDraft(field, value) {
     if (field === 'from' || field === 'to') setDatePreset('custom');
@@ -287,6 +303,13 @@ export default function Analytics() {
     setFilters({ ...range, serviceId: '', barberId: '', page: 1, pageSize: PAGE_SIZE });
   }
 
+  function startNewChat() {
+    setChatMessages([]);
+    setChatInput('');
+    setChatError('');
+    setLastChatMessage('');
+  }
+
   const loading = shopLoading || analyticsLoading;
   const error = shopError || analyticsError;
   const filterError = dateRangeError(draft.from, draft.to);
@@ -333,7 +356,8 @@ export default function Analytics() {
         <div className={styles.chatDivider} />
         <div className={styles.chatHeading}>
           <h3>Ask about your analytics</h3>
-          <p>Answers use the current filters and available historical data. This chat stays in this browser session.</p>
+          <p>Ask about this shop’s metrics, how FlowCut works, or general barbershop operations. Analytics answers use the current filters. This chat stays in this browser session.</p>
+          {!!chatMessages.length && <button className={styles.newChatButton} type="button" disabled={chatLoading} onClick={startNewChat}>Start new chat</button>}
         </div>
         {!chatMessages.length && (
           <div className={styles.promptList} aria-label="Suggested analytics questions">
@@ -341,7 +365,7 @@ export default function Analytics() {
           </div>
         )}
         {!!chatMessages.length && (
-          <div className={styles.chatTranscript} aria-label="Assistant conversation" aria-live="polite">
+          <div className={styles.chatTranscript} ref={chatTranscriptRef} aria-label="Assistant conversation" aria-live="polite">
             {chatMessages.map((entry, index) => (
               <article className={entry.role === 'user' ? styles.userMessage : styles.assistantMessage} key={`${entry.role}-${index}`}>
                 <strong>{entry.role === 'user' ? 'You' : 'FlowCut Analytics Assistant'}</strong>
@@ -349,10 +373,10 @@ export default function Analytics() {
                   <>
                     <p className={styles.contextLine}>Using {entry.content.context.dateRange} · {entry.content.context.service} · {entry.content.context.barber}</p>
                     <p>{entry.content.answer}</p>
-                    {entry.content.observedFacts.length > 0 && <div><strong>Observed facts</strong><ul>{entry.content.observedFacts.map((item, itemIndex) => <li key={itemIndex}>{item.text}<small className={styles.chatEvidence}>Evidence: {item.evidence.map((source) => `${source.label}: ${source.value}`).join(' · ')}</small></li>)}</ul></div>}
-                    {entry.content.interpretations.length > 0 && <div><strong>Possible explanations</strong><ul>{entry.content.interpretations.map((item, itemIndex) => <li key={itemIndex}>{item.text}<small className={styles.chatEvidence}>Evidence: {item.evidence.map((source) => `${source.label}: ${source.value}`).join(' · ')}</small></li>)}</ul></div>}
-                    {entry.content.recommendations.length > 0 && <div><strong>Recommendations</strong><ul>{entry.content.recommendations.map((item, itemIndex) => <li key={itemIndex}>{item.text}<small className={styles.chatEvidence}>Evidence: {item.evidence.map((source) => `${source.label}: ${source.value}`).join(' · ')}</small></li>)}</ul></div>}
-                    {entry.content.limitations.length > 0 && <div><strong>Limitations</strong><ul>{entry.content.limitations.map((item, itemIndex) => <li key={itemIndex}>{item.text}<small className={styles.chatEvidence}>Evidence: {item.evidence.map((source) => `${source.label}: ${source.value}`).join(' · ')}</small></li>)}</ul></div>}
+                    {entry.content.observedFacts.length > 0 && <div><strong>Observed facts</strong><ul>{entry.content.observedFacts.map((item, itemIndex) => <li key={itemIndex}><AssistantText>{item.text}</AssistantText><small className={styles.chatEvidence}>Evidence: {item.evidence.map((source) => `${source.label}: ${source.value}`).join(' · ')}</small></li>)}</ul></div>}
+                    {entry.content.interpretations.length > 0 && <div><strong>Possible explanations</strong><ul>{entry.content.interpretations.map((item, itemIndex) => <li key={itemIndex}><AssistantText>{item.text}</AssistantText><small className={styles.chatEvidence}>Evidence: {item.evidence.map((source) => `${source.label}: ${source.value}`).join(' · ')}</small></li>)}</ul></div>}
+                    {entry.content.recommendations.length > 0 && <div><strong>Recommendations</strong><ul>{entry.content.recommendations.map((item, itemIndex) => <li key={itemIndex}><AssistantText>{item.text}</AssistantText><small className={styles.chatEvidence}>Evidence: {item.evidence.map((source) => `${source.label}: ${source.value}`).join(' · ')}</small></li>)}</ul></div>}
+                    {entry.content.limitations.length > 0 && <div><strong>Limitations</strong><ul>{entry.content.limitations.map((item, itemIndex) => <li key={itemIndex}><AssistantText>{item.text}</AssistantText><small className={styles.chatEvidence}>Evidence: {item.evidence.map((source) => `${source.label}: ${source.value}`).join(' · ')}</small></li>)}</ul></div>}
                   </>
                 )}
               </article>
@@ -363,7 +387,7 @@ export default function Analytics() {
         {chatError && <div className={styles.chatError} role="alert"><span>{chatError}</span><button type="button" disabled={chatLoading} onClick={() => sendChat(lastChatMessage, true)}>Try again</button></div>}
         <form className={styles.chatForm} onSubmit={(event) => { event.preventDefault(); sendChat(); }}>
           <label className={styles.srOnly} htmlFor="analytics-chat-message">Ask a question about this shop’s analytics</label>
-          <textarea id="analytics-chat-message" value={chatInput} maxLength={1000} rows={2} placeholder="Ask about waits, busy periods, estimate accuracy, or next steps…" onChange={(event) => setChatInput(event.target.value)} />
+          <textarea id="analytics-chat-message" value={chatInput} maxLength={1000} rows={2} placeholder="Ask a follow-up, about your shop, or how FlowCut works…" onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendChat(); } }} />
           <button className={styles.aiButton} type="submit" disabled={chatLoading || !!filterError || !chatInput.trim()}>{chatLoading ? 'Sending…' : 'Send'}</button>
         </form>
         <p className={styles.note}>Up to 1,000 characters per message. Do not enter customer names, emails, or other personal details.</p>
