@@ -8,6 +8,7 @@ import {
   Notification,
   PushSubscription,
   QueueEntry,
+  AuthSession,
   User,
 } from './models/index.js';
 import { startQueueNotificationMonitor } from './services/queueNotificationService.js';
@@ -20,6 +21,7 @@ export async function startServer({
     PushSubscription.syncIndexes(),
     QueueEntry.syncIndexes(),
     MapImage.syncIndexes(),
+    AuthSession.syncIndexes(),
   ]),
   startMonitor = startQueueNotificationMonitor,
   app = createApp(),
@@ -37,7 +39,7 @@ export async function startServer({
   await synchronizeIndexes();
 
   console.log(
-    '[db] User, notification, push subscription, queue, and map image indexes synchronized'
+    '[db] User, notification, push subscription, queue, map image, and auth session indexes synchronized'
   );
 
   startMonitor();

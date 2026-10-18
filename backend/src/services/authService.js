@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { User, QueueEntry, Barber, PushSubscription } from '../models/index.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { signToken } from '../utils/tokens.js';
+import { authSessionService } from './authSessionService.js';
 import {
   validateName,
   validateMobileNumber,
@@ -189,7 +189,8 @@ export async function verifyEmailOtp({ email, otp }) {
   user.otpAttempts = 0;
   user.otpSentAt = null;
   await user.save({ validateBeforeSave: false });
-  return { user: toSafeUser(user), token: signToken({ id: user._id.toString() }) };
+  const session = await authSessionService.create(user._id);
+  return { user: toSafeUser(user), token: session.token, session };
 }
 
 export async function resendEmailOtp({ email }) {
@@ -339,8 +340,8 @@ export async function authenticateUser({ email, password }) {
     throw new AppError(401, LOGIN_GENERIC_ERROR);
   }
 
-  const token = signToken({ id: user._id.toString() });
-  return { user: toSafeUser(user), token };
+  const session = await authSessionService.create(user._id);
+  return { user: toSafeUser(user), token: session.token, session };
 }
 
 /**

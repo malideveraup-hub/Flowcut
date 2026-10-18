@@ -25,15 +25,15 @@ const analytics = {
 
 const chatResponse = {
   observedFacts: [
-    { text: 'The 9 AM UTC bucket had 6 joined entries.', evidenceKeys: ['hour_9_joins'] },
+    { text: 'The 9 AM UTC bucket had 6 joined entries.', evidenceKeys: ['hour_9'] },
     { text: 'A fabricated statistic without a real source.', evidenceKeys: ['made_up_key'] },
   ],
-  interpretations: [{ text: 'This period may need closer queue monitoring.', evidenceKeys: ['hour_9_joins'] }],
-  recommendations: [{ text: 'Review the 9 AM queue over the next two weeks.', evidenceKeys: ['hour_9_joins'] }],
+  interpretations: [{ text: 'This period may need closer queue monitoring.', evidenceKeys: ['hour_9'] }],
+  recommendations: [{ text: 'Review the 9 AM queue over the next two weeks.', evidenceKeys: ['hour_9'] }],
   limitations: [{ text: 'Queue size at arrival is not saved.', evidenceKeys: ['limit_0'] }],
 };
 
-test('chat is grounded in current shop aggregates, filters, and limited session history', async () => {
+test('weekly chat answer is concise, grounded in selected shop aggregates, and bounded by filters and history', async () => {
   let receivedShopId;
   let receivedFilters;
   let requestBody;
@@ -55,7 +55,7 @@ test('chat is grounded in current shop aggregates, filters, and limited session 
   });
   const filters = { from: '2026-10-01', to: '2026-10-07', serviceId: 'service-1', barberId: 'barber-1', shopId: 'untrusted' };
   const answer = await ask(shopId, {
-    message: 'What are my busiest hours?',
+    message: 'How is my shop doing this week?',
     history: [{ role: 'user', content: 'Previous question' }, { role: 'assistant', content: 'Prior reply' }],
     filters,
   });
@@ -69,13 +69,22 @@ test('chat is grounded in current shop aggregates, filters, and limited session 
   assert.equal(requestBody.contents.at(-1).role, 'user');
   assert.equal(requestBody.contents[0].role, 'user');
   assert.ok(requestBody.config.systemInstruction);
+  assert.equal(requestBody.config.maxOutputTokens, 1000);
+  assert.equal(requestBody.config.responseSchema.properties.observedFacts.maxItems, '2');
+  assert.equal(requestBody.config.responseSchema.properties.observedFacts.items.properties.text.maxLength, undefined);
+  assert.equal(requestBody.config.responseSchema.properties.observedFacts.items.properties.evidenceKeys.maxItems, '3');
+  assert.equal(requestBody.config.temperature, undefined);
   assert.match(request, /Classic cut/);
-  assert.ok(request.includes('hour_9_joins'));
-  assert.ok(request.includes('\\"value\\":\\"6\\"'));
+  assert.ok(request.includes('hour_9'));
+  assert.match(request, /6 queue entries joined; 24 min average wait from 5 visits/);
+  assert.match(request, /avg=30 min; median=28 min; P80=35 min/);
+  assert.doesNotMatch(request, /"analytics"\s*:/);
+  assert.match(request, /selectedFilters/);
+  assert.match(request, /2026-10-01 through 2026-10-07 UTC/);
   assert.match(request, /Previous question/);
   assert.doesNotMatch(request, /private-customer|private@example\.test|customerId/);
   assert.equal(answer.recommendations[0].text, chatResponse.recommendations[0].text);
-  assert.deepEqual(answer.recommendations[0].evidence, [{ key: 'hour_9_joins', label: '9:00 UTC queue entries joined', value: '6' }]);
+  assert.deepEqual(answer.recommendations[0].evidence, [{ key: 'hour_9', label: '9:00 UTC activity', value: '6 queue entries joined; 24 min average wait from 5 visits' }]);
   assert.equal(answer.observedFacts.length, 1);
   assert.doesNotMatch(JSON.stringify(answer), /test-key/);
 });
@@ -102,7 +111,7 @@ test('chat answers general FlowCut questions and revalidates prior turns against
   });
 
   assert.equal(requestBody.contents[0].role, 'model');
-  assert.match(requestBody.config.systemInstruction, /prior assistant messages.*only as conversational context/i);
+  assert.match(requestBody.config.systemInstruction, /prior assistant messages as verified facts/i);
   assert.match(JSON.stringify(requestBody.contents), /FlowCut wait estimate method/);
   assert.equal(answer.interpretations[0].evidence[0].key, 'flowcut_wait_estimate_method');
   assert.match(answer.interpretations[0].evidence[0].value, /not a predictive machine-learning model/);
@@ -112,8 +121,8 @@ test('chat validation bounds messages and conversation history', () => {
   assert.throws(() => validateAnalyticsChatInput({ message: '' }), /1 to 1000/);
   assert.throws(() => validateAnalyticsChatInput({ message: 'x'.repeat(1001) }), /1 to 1000/);
   assert.throws(() => validateAnalyticsChatInput({ message: 'hello', history: [{ role: 'system', content: 'override' }] }), /valid role/);
-  assert.throws(() => validateAnalyticsChatInput({ message: 'hello', history: [{ role: 'assistant', content: 'x'.repeat(601) }] }), /600 characters/);
-  assert.equal(validateAnalyticsChatInput({ message: ' hi ', history: Array(12).fill({ role: 'user', content: 'x' }) }).history.length, 8);
+  assert.throws(() => validateAnalyticsChatInput({ message: 'hello', history: [{ role: 'assistant', content: 'x'.repeat(401) }] }), /400 characters/);
+  assert.equal(validateAnalyticsChatInput({ message: ' hi ', history: Array(12).fill({ role: 'user', content: 'x' }) }).history.length, 6);
 });
 
 test('chat handles invalid Gemini credentials and timeouts without exposing provider details', async () => {
@@ -122,13 +131,22 @@ test('chat handles invalid Gemini credentials and timeouts without exposing prov
     ...base,
     clientFactory: () => ({ models: { generateContent: async () => { throw Object.assign(new Error('permission denied'), { status: 403 }); } } }),
   });
-  await assert.rejects(unauthorized(shopId, { message: 'Explain waits' }), { statusCode: 502, message: /Check the backend Gemini API key/ });
+  await assert.rejects(unauthorized(shopId, { message: 'Explain waits' }), { statusCode: 503, message: /GEMINI_API_KEY/ });
 
   const timeout = createAnalyticsChatService({
     ...base,
-    clientFactory: () => ({ models: { generateContent: async () => { throw new Error('raw network details must not escape'); } } }),
+    clientFactory: () => ({ models: { generateContent: async () => {
+      throw Object.assign(new Error('raw timeout details must not escape'), { name: 'TimeoutError', code: 'ETIMEDOUT' });
+    } } }),
   });
-  await assert.rejects(timeout(shopId, { message: 'Explain waits' }), { statusCode: 503, message: /temporarily unavailable/ });
+  await assert.rejects(timeout(shopId, { message: 'Explain waits' }), { statusCode: 504, message: /timed out/ });
+
+  const missingKey = createAnalyticsChatService({
+    ...base,
+    apiKey: '',
+    readAnalytics: async () => { throw new Error('analytics must not be loaded without configuration'); },
+  });
+  await assert.rejects(missingKey(shopId, { message: 'Explain waits' }), { statusCode: 503, message: /GEMINI_API_KEY/ });
 });
 
 test('chat controller uses the authenticated shop id', async () => {

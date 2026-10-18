@@ -199,6 +199,32 @@ function AnalyticsTable({ records, pagination, onPageChange }) {
   );
 }
 
+function formatChatErrorMessage(rawError) {
+  const msg = rawError?.message || String(rawError || '');
+  if (/timed? ?out|too long/i.test(msg)) {
+    return 'The AI assistant took too long to respond. Please try again.';
+  }
+  if (/rate limit|too many requests|busy right now/i.test(msg)) {
+    return 'The AI assistant is busy right now. Please wait a moment before trying again.';
+  }
+  if (/quota|resource_exhausted/i.test(msg)) {
+    return 'The AI assistant is busy right now. Please wait a moment before trying again.';
+  }
+  if (/network|fetch|connect|offline|reach/i.test(msg)) {
+    return 'Unable to connect to the AI assistant. Check your connection and try again.';
+  }
+  if (/GEMINI_API_KEY|unauthorized|permission|not configured|configuration|model/i.test(msg)) {
+    return 'The AI assistant is temporarily unavailable. Please contact your administrator if the problem continues.';
+  }
+  if (/unavailable|503|trouble/i.test(msg)) {
+    return "We're having trouble generating your answer right now. Please try again shortly.";
+  }
+  if (/1 to 1000|400 characters|valid role/i.test(msg)) {
+    return msg;
+  }
+  return msg || "We're having trouble generating your answer right now. Please try again shortly.";
+}
+
 export default function Analytics() {
   const initial = initialDateRange();
   const [datePreset, setDatePreset] = useState('week');
@@ -209,7 +235,9 @@ export default function Analytics() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState('');
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantExpanded, setAssistantExpanded] = useState(false);
   const [lastChatMessage, setLastChatMessage] = useState('');
+  const chatRequestInFlightRef = useRef(false);
   const chatTranscriptRef = useRef(null);
   const { data: shop, loading: shopLoading, error: shopError, refetch: refetchShop } = useAsync(fetchOwnShop);
   const {
@@ -259,20 +287,20 @@ export default function Analytics() {
 
   async function sendChat(rawMessage = chatInput, retry = false) {
     const message = rawMessage.trim();
-    if (!message || chatLoading || message.length > 1000) return;
+    if (!message || chatLoading || chatRequestInFlightRef.current || message.length > 1000) return;
+    chatRequestInFlightRef.current = true;
     const previousMessages = retry ? chatMessages.slice(0, -1) : chatMessages;
     setChatError('');
     setLastChatMessage(message);
     if (!retry) {
       setChatMessages((current) => [...current, { role: 'user', content: message }].slice(-19));
-      setChatInput('');
     }
     setChatLoading(true);
-    const history = previousMessages.slice(-8).map((item) => ({
+    const history = previousMessages.slice(-6).map((item) => ({
       role: item.role,
       content: (item.role === 'assistant'
         ? `Previous filters: ${item.content.context.dateRange}; ${item.content.context.service}; ${item.content.context.barber}. ${assistantHistoryText(item.content)}`
-        : item.content).slice(0, 600),
+        : item.content).slice(0, 400),
     }));
     try {
       const result = await askOwnShopAnalyticsAssistant(message, history, {
@@ -282,9 +310,11 @@ export default function Analytics() {
         barberId: filters.barberId,
       });
       setChatMessages((current) => [...current, { role: 'assistant', content: result }].slice(-20));
+      setChatInput((current) => current === message ? '' : current);
     } catch (err) {
-      setChatError(err.message || 'The analytics assistant is temporarily unavailable.');
+      setChatError(formatChatErrorMessage(err));
     } finally {
+      chatRequestInFlightRef.current = false;
       setChatLoading(false);
     }
   }
@@ -345,12 +375,38 @@ export default function Analytics() {
       </form>
 
       {assistantOpen && <button className={styles.assistantBackdrop} type="button" onClick={() => setAssistantOpen(false)} aria-label="Close assistant panel" />}
-      <section id="flowcut-analytics-assistant" className={`${styles.panel} ${styles.aiPanel} ${assistantOpen ? styles.assistantDrawer : styles.assistantClosed}`} role={assistantOpen ? 'dialog' : undefined} aria-modal={assistantOpen ? 'true' : undefined} aria-labelledby="ai-insights-heading" aria-hidden={!assistantOpen}>
+      <section
+        id="flowcut-analytics-assistant"
+        className={`${styles.panel} ${styles.aiPanel} ${assistantOpen ? styles.assistantDrawer : styles.assistantClosed} ${assistantExpanded ? styles.assistantExpanded : ''}`}
+        role={assistantOpen ? 'dialog' : undefined}
+        aria-modal={assistantOpen ? 'true' : undefined}
+        aria-labelledby="ai-insights-heading"
+        aria-hidden={!assistantOpen}
+      >
         <div className={styles.aiHeader}>
           <div className={styles.panelHeader}>
             <div><h2 id="ai-insights-heading">Ask FlowCut</h2><p>Answers use this shop's selected analytics.</p></div>
           </div>
-          <button className={styles.closeAssistant} type="button" onClick={() => setAssistantOpen(false)} aria-label="Close assistant">×</button>
+          <div className={styles.aiHeaderActions}>
+            <button
+              className={styles.expandAssistant}
+              type="button"
+              onClick={() => setAssistantExpanded((prev) => !prev)}
+              aria-label={assistantExpanded ? 'Collapse assistant panel' : 'Expand assistant panel'}
+              title={assistantExpanded ? 'Collapse panel' : 'Expand panel'}
+            >
+              {assistantExpanded ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7" />
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                </svg>
+              )}
+            </button>
+            <button className={styles.closeAssistant} type="button" onClick={() => setAssistantOpen(false)} aria-label="Close assistant">×</button>
+          </div>
         </div>
         <p className={styles.note}>When used, FlowCut sends aggregate statistics for this shop and filter range plus your recent chat messages to Google Gemini. Queue rows and customer identity details are not sent. Do not include customer personal information in messages.</p>
         <div className={styles.chatDivider} />
@@ -387,7 +443,7 @@ export default function Analytics() {
         {chatError && <div className={styles.chatError} role="alert"><span>{chatError}</span><button type="button" disabled={chatLoading} onClick={() => sendChat(lastChatMessage, true)}>Try again</button></div>}
         <form className={styles.chatForm} onSubmit={(event) => { event.preventDefault(); sendChat(); }}>
           <label className={styles.srOnly} htmlFor="analytics-chat-message">Ask a question about this shop’s analytics</label>
-          <textarea id="analytics-chat-message" value={chatInput} maxLength={1000} rows={2} placeholder="Ask a follow-up, about your shop, or how FlowCut works…" onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendChat(); } }} />
+          <textarea id="analytics-chat-message" value={chatInput} maxLength={1000} rows={2} disabled={chatLoading} placeholder="Ask a follow-up, about your shop, or how FlowCut works…" onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendChat(); } }} />
           <button className={styles.aiButton} type="submit" disabled={chatLoading || !!filterError || !chatInput.trim()}>{chatLoading ? 'Sending…' : 'Send'}</button>
         </form>
         <p className={styles.note}>Up to 1,000 characters per message. Do not enter customer names, emails, or other personal details.</p>

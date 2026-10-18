@@ -12,7 +12,7 @@ process.env.RESEND_API_KEY = 'test-only-resend-key';
 process.env.MAIL_FROM = 'FlowCut <no-reply@example.test>';
 process.env.FRONTEND_URL = 'https://flowcut.test';
 
-const [{ User }, authServiceModule] = await Promise.all([
+const [{ User, AuthSession }, authServiceModule] = await Promise.all([
   import('../src/models/index.js'),
   import('../src/services/authService.js'),
 ]);
@@ -203,6 +203,7 @@ test('a valid token is single-use and the new password works for login', async (
     passwordResetConsumed = true;
     return account;
   });
+  t.mock.method(AuthSession, 'create', async (record) => record);
 
   const resetResult = await resetPassword({
     token: originalToken,

@@ -3,10 +3,11 @@
 // the same consistent shape) and the errorHandler middleware turns it
 // into the response shape used everywhere: { success, message, errors }.
 export class AppError extends Error {
-  constructor(statusCode, message, errors = []) {
+  constructor(statusCode, message, errors = [], code = null) {
     super(message);
     this.statusCode = statusCode;
     this.errors = errors;
+    this.code = code;
   }
 }
 
@@ -56,7 +57,12 @@ function translateMongooseError(err) {
 // not remove any of these parameters even if unused.
 export function errorHandler(err, req, res, _next) {
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({ success: false, message: err.message, errors: err.errors });
+    return res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+      errors: err.errors,
+      ...(err.code ? { code: err.code } : {}),
+    });
   }
 
   if (err.status === 413 || err.statusCode === 413 || err.type === 'entity.too.large') {

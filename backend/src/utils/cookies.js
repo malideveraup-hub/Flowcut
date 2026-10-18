@@ -18,7 +18,7 @@ export function setAuthCookie(res, token, rememberMe = true) {
   if (rememberMe) {
     // Browser lifetime is separate from JWT expiry. Session cookies are
     // used when Remember Me is unchecked; persistent cookies last 7 days.
-    options.maxAge = 7 * 24 * 60 * 60 * 1000;
+    options.maxAge = env.authSessionMaxLifetimeMs;
   }
   res.cookie(AUTH_COOKIE_NAME, token, options);
 }

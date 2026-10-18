@@ -1,15 +1,33 @@
 import { verifyToken } from '../utils/tokens.js';
-import { AUTH_COOKIE_NAME } from '../utils/cookies.js';
+import { AUTH_COOKIE_NAME, clearAuthCookie } from '../utils/cookies.js';
 import { User, Barber } from '../models/index.js';
 import { AppError } from './errorHandler.js';
 import { hasCurrentConsent } from '../validation/consentValidation.js';
+import { authSessionService } from '../services/authSessionService.js';
+import { env } from '../config/env.js';
+
+const PASSIVE_AUTH_PATHS = new Set([
+  '/api/queue/my',
+  '/api/queue/my/history',
+  '/api/barber/dashboard',
+  '/api/shop-admin/dashboard-summary',
+]);
+
+export function qualifiesAsSessionActivity(req) {
+  const path = req.originalUrl.split('?')[0];
+  if (path === '/api/notifications' || path.startsWith('/api/notifications/')) return false;
+  if (path === '/api/shop-admin/analytics' || path.startsWith('/api/shop-admin/analytics/')) return false;
+  if (path === '/api/admin/analytics' || path.startsWith('/api/admin/analytics/')) return false;
+  if (req.method === 'GET' && PASSIVE_AUTH_PATHS.has(path)) return false;
+  return true;
+}
 
 /**
  * Verifies the auth cookie and attaches a trustworthy req.user.
  *
  * Deliberately re-reads the user from MongoDB on every request instead of
  * trusting the JWT payload for anything beyond "which user id" — the
- * token only ever contains { id } (see utils/tokens.js). This means
+ * the user id selects the account and the session id is checked in MongoDB. This means
  * req.user.role and req.user.shopId always reflect the CURRENT database
  * state, not whatever was true when the user last logged in.
  */
@@ -23,8 +41,24 @@ export async function requireAuth(req, res, next) {
     let payload;
     try {
       payload = verifyToken(token);
-    } catch {
-      throw new AppError(401, 'Authentication required.');
+    } catch (error) {
+      clearAuthCookie(res);
+      if (error?.name === 'TokenExpiredError') {
+        throw new AppError(401, 'Your session has expired. Please sign in again.', [], 'SESSION_EXPIRED');
+      }
+      throw new AppError(401, 'Authentication required.', [], 'AUTH_REQUIRED');
+    }
+
+    if (!payload?.jti) {
+      clearAuthCookie(res);
+      throw new AppError(401, 'Your session has expired. Please sign in again.', [], 'SESSION_EXPIRED');
+    }
+
+    const qualifyingActivity = qualifiesAsSessionActivity(req);
+    const session = await authSessionService.validate(payload.jti, { qualifyingActivity });
+    if (!session || String(session.userId) !== String(payload.id)) {
+      clearAuthCookie(res);
+      throw new AppError(401, 'Your session has expired. Please sign in again.', [], 'SESSION_EXPIRED');
     }
 
     const user = await User.findById(payload.id);
@@ -34,7 +68,9 @@ export async function requireAuth(req, res, next) {
     // (e.g. it was issued moments before the account was deleted and
     // hasn't expired yet).
     if (!user || user.isDeleted) {
-      throw new AppError(401, 'Authentication required.');
+      clearAuthCookie(res);
+      await authSessionService.revoke(payload.jti);
+      throw new AppError(401, 'Your session is no longer valid. Please sign in again.', [], 'SESSION_EXPIRED');
     }
 
     req.user = {
@@ -48,6 +84,15 @@ export async function requireAuth(req, res, next) {
       shopId: user.shopId ? user.shopId.toString() : null,
       consentCurrent: hasCurrentConsent(user),
     };
+
+    const lastActivityAtMs = new Date(session.lastActivityAt).getTime();
+    const absoluteExpiresAtMs = new Date(session.absoluteExpiresAt).getTime();
+    const idleExpiresAtMs = lastActivityAtMs + env.authSessionIdleTimeoutMs;
+    res.set('X-FlowCut-Idle-Expires-At', String(idleExpiresAtMs));
+    res.set('X-FlowCut-Absolute-Expires-At', String(absoluteExpiresAtMs));
+    res.set('X-FlowCut-Idle-Remaining-Ms', String(Math.max(0, idleExpiresAtMs - Date.now())));
+    res.set('X-FlowCut-Absolute-Remaining-Ms', String(Math.max(0, absoluteExpiresAtMs - Date.now())));
+    res.set('X-FlowCut-Session-Activity', qualifyingActivity ? '1' : '0');
 
     next();
   } catch (err) {

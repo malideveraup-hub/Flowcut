@@ -130,23 +130,27 @@ test('repeat and different-customer services each get independent timer records'
     assert.notEqual(thirdLog.startTime.getTime(), secondLog.startTime.getTime());
 
     const { createApp } = await import('../src/app.js');
-    const { signToken } = await import('../src/utils/tokens.js');
+    const { authSessionService } = await import('../src/services/authSessionService.js');
+    const [customerSession, barberSession] = await Promise.all([
+      authSessionService.create(customerB._id),
+      authSessionService.create(barberUser._id),
+    ]);
     apiServer = createApp().listen(0, '127.0.0.1');
     await new Promise((resolve, reject) => {
       apiServer.once('listening', resolve);
       apiServer.once('error', reject);
     });
     const apiRoot = `http://127.0.0.1:${apiServer.address().port}`;
-    async function getPageData(path, user) {
+    async function getPageData(path, token) {
       const response = await fetch(`${apiRoot}${path}`, {
-        headers: { Cookie: `flowcut_token=${signToken({ id: String(user._id) })}` },
+        headers: { Cookie: `flowcut_token=${token}` },
       });
       return { status: response.status, cacheControl: response.headers.get('cache-control'), body: await response.json() };
     }
 
     const [customerPage, barberPage] = await Promise.all([
-      getPageData('/api/queue/my', customerB),
-      getPageData('/api/barber/dashboard', barberUser),
+      getPageData('/api/queue/my', customerSession.token),
+      getPageData('/api/barber/dashboard', barberSession.token),
     ]);
     assert.equal(customerPage.status, 200);
     assert.equal(barberPage.status, 200);

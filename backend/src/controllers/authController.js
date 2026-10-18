@@ -1,5 +1,17 @@
 import * as authService from '../services/authService.js';
-import { setAuthCookie, clearAuthCookie } from '../utils/cookies.js';
+import { setAuthCookie, clearAuthCookie, AUTH_COOKIE_NAME } from '../utils/cookies.js';
+import { authSessionService } from '../services/authSessionService.js';
+import { env } from '../config/env.js';
+
+function setSessionTimingHeaders(res, lastActivityAt, absoluteExpiresAt) {
+  const idleExpiresAtMs = new Date(lastActivityAt).getTime() + env.authSessionIdleTimeoutMs;
+  const absoluteExpiresAtMs = new Date(absoluteExpiresAt).getTime();
+  res.set('X-FlowCut-Idle-Expires-At', String(idleExpiresAtMs));
+  res.set('X-FlowCut-Absolute-Expires-At', String(absoluteExpiresAtMs));
+  res.set('X-FlowCut-Idle-Remaining-Ms', String(Math.max(0, idleExpiresAtMs - Date.now())));
+  res.set('X-FlowCut-Absolute-Remaining-Ms', String(Math.max(0, absoluteExpiresAtMs - Date.now())));
+  res.set('X-FlowCut-Session-Activity', '1');
+}
 
 /**
  * Every handler below reads ONLY the specific fields it expects off
@@ -32,8 +44,9 @@ export async function register(req, res, next) {
 export async function login(req, res, next) {
   try {
     const { email, password, rememberMe } = req.body || {};
-    const { user, token } = await authService.authenticateUser({ email, password });
+    const { user, token, session } = await authService.authenticateUser({ email, password });
     setAuthCookie(res, token, rememberMe !== false);
+    setSessionTimingHeaders(res, session.lastActivityAt, session.absoluteExpiresAt);
     res.json({ success: true, data: { user } });
   } catch (err) {
     next(err);
@@ -43,8 +56,9 @@ export async function login(req, res, next) {
 export async function verifyEmail(req, res, next) {
   try {
     const { email, otp } = req.body || {};
-    const { user, token } = await authService.verifyEmailOtp({ email, otp });
+    const { user, token, session } = await authService.verifyEmailOtp({ email, otp });
     setAuthCookie(res, token);
+    setSessionTimingHeaders(res, session.lastActivityAt, session.absoluteExpiresAt);
     res.json({ success: true, data: { user } });
   } catch (err) {
     next(err);
@@ -97,7 +111,11 @@ export async function updateMe(req, res, next) {
 }
 
 export async function logout(req, res) {
-  clearAuthCookie(res);
+  try {
+    await authSessionService.revokeToken(req.cookies?.[AUTH_COOKIE_NAME]);
+  } finally {
+    clearAuthCookie(res);
+  }
   res.json({ success: true, message: 'Logged out.' });
 }
 

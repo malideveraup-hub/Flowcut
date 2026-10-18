@@ -55,6 +55,7 @@ test('installed Gemini SDK uses the supported GenerateContent request and retrie
   assert.equal(body.contents[0].parts[0].text, 'Check supported aggregates.');
   assert.equal(body.generationConfig.responseMimeType, 'application/json');
   assert.equal(body.generationConfig.responseSchema.properties.answer.type, 'STRING');
+  assert.equal(body.generationConfig.temperature, undefined);
 
   let permanentFailureAttempts = 0;
   await assert.rejects(requestGeminiJson({
@@ -64,7 +65,7 @@ test('installed Gemini SDK uses the supported GenerateContent request and retrie
       permanentFailureAttempts += 1;
       return new Response(JSON.stringify({ error: { message: 'invalid key' } }), { status: 403 });
     },
-  }), { statusCode: 502 });
+  }), { statusCode: 503 });
   assert.equal(permanentFailureAttempts, 1);
 });
 
@@ -121,13 +122,41 @@ test('Gemini provider failures and malformed responses become safe application e
     ...base,
     clientFactory: () => ({ models: { generateContent: async () => { throw Object.assign(new Error('quota'), { status: 429 }); } } }),
   });
-  await assert.rejects(unavailable(shopId, {}), { statusCode: 503, message: /rate limited/ });
+  await assert.rejects(unavailable(shopId, {}), { statusCode: 503, message: /usage quota/ });
 
   const malformed = createAnalyticsInsightsService({
     ...base,
     clientFactory: () => ({ models: { generateContent: async () => ({ text: 'not json' }) } }),
   });
   await assert.rejects(malformed(shopId, {}), { statusCode: 502, message: /unreadable response/ });
+});
+
+test('Gemini configuration failures retain provider codes and safe diagnostics in logs', async () => {
+  const logs = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => logs.push(args);
+  try {
+    await assert.rejects(requestGeminiJson({
+      prompt: 'private customer@example.test prompt',
+      schema: { responseSchema: { type: 'OBJECT' } },
+      apiKey: 'private-test-key',
+      model: 'gemini-3.8-flash',
+      fetchImpl: async () => new Response(JSON.stringify({ error: {
+        code: 400,
+        status: 'INVALID_ARGUMENT',
+        message: 'Unsupported maxLength setting for responseSchema; customer@example.test',
+      } }), { status: 400, headers: { 'Content-Type': 'application/json' } }),
+    }), { statusCode: 502, message: /rejected the analytics request configuration/ });
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.equal(logs.length, 1);
+  const [, entry] = logs[0];
+  assert.equal(entry.providerCode, 'INVALID_ARGUMENT');
+  assert.equal(entry.diagnostic, 'schema,string_length_constraint');
+  assert.equal(entry.status, 400);
+  assert.doesNotMatch(JSON.stringify(entry), /customer@example\.test|private-test-key|private customer/);
 });
 
 test('Gemini safety blocks and token limits return clear safe errors', async () => {
@@ -140,7 +169,60 @@ test('Gemini safety blocks and token limits return clear safe errors', async () 
   await assert.rejects(requestGeminiJson({
     prompt: 'test', schema, apiKey: 'test-key', model: 'gemini-3.8-flash',
     clientFactory: () => ({ models: { generateContent: async () => ({ candidates: [{ finishReason: 'MAX_TOKENS' }] }) } }),
-  }), { statusCode: 502, message: /response was too long/ });
+  }), { statusCode: 502, message: /reached its answer limit/ });
+});
+
+test('Gemini quota and rate-limit responses are not retried as if they were transient', async () => {
+  let quotaAttempts = 0;
+  await assert.rejects(requestGeminiJson({
+    prompt: 'test', schema: { responseSchema: { type: 'OBJECT' } },
+    apiKey: 'test-key', model: 'gemini-3.8-flash',
+    fetchImpl: async () => {
+      quotaAttempts += 1;
+      return new Response(JSON.stringify({ error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Project quota exceeded' } }), { status: 429 });
+    },
+  }), { statusCode: 503, message: /usage quota/ });
+  assert.equal(quotaAttempts, 1);
+
+  let rateLimitAttempts = 0;
+  await assert.rejects(requestGeminiJson({
+    prompt: 'test', schema: { responseSchema: { type: 'OBJECT' } },
+    apiKey: 'test-key', model: 'gemini-3.8-flash',
+    fetchImpl: async () => {
+      rateLimitAttempts += 1;
+      return new Response(JSON.stringify({ error: { code: 429, message: 'Too many requests' } }), { status: 429 });
+    },
+  }), { statusCode: 503, message: /temporarily rate limited/ });
+  assert.equal(rateLimitAttempts, 1);
+});
+
+test('Gemini distinguishes timeouts and oversized inputs without exposing provider text', async () => {
+  const schema = { responseSchema: { type: 'OBJECT' } };
+  await assert.rejects(requestGeminiJson({
+    prompt: 'test', schema, apiKey: 'test-key', model: 'gemini-3.8-flash',
+    clientFactory: () => ({ models: { generateContent: async () => {
+      throw Object.assign(new Error('private timeout payload should not be returned'), { name: 'TimeoutError', code: 'UND_ERR_CONNECT_TIMEOUT' });
+    } } }),
+  }), { statusCode: 504, message: /timed out/ });
+
+  await assert.rejects(requestGeminiJson({
+    prompt: 'test', schema, apiKey: 'test-key', model: 'gemini-3.8-flash',
+    clientFactory: () => ({ models: { generateContent: async () => {
+      throw Object.assign(new Error('Input prompt contains too many tokens'), { status: 400, code: 'INVALID_ARGUMENT' });
+    } } }),
+  }), { statusCode: 413, message: /selected analytics request is too large/ });
+});
+
+test('empty Gemini text is reported separately from malformed JSON', async () => {
+  const schema = { responseSchema: { type: 'OBJECT' } };
+  await assert.rejects(requestGeminiJson({
+    prompt: 'test', schema, apiKey: 'test-key', model: 'gemini-3.8-flash',
+    clientFactory: () => ({ models: { generateContent: async () => ({ text: '' }) } }),
+  }), { statusCode: 502, message: /empty response/ });
+  await assert.rejects(requestGeminiJson({
+    prompt: 'test', schema, apiKey: 'test-key', model: 'gemini-3.8-flash',
+    clientFactory: () => ({ models: { generateContent: async () => ({ text: '{broken' }) } }),
+  }), { statusCode: 502, message: /unreadable response/ });
 });
 
 test('insight controller uses the authenticated shop id and request filters', async () => {

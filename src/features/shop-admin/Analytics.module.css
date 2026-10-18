@@ -83,9 +83,19 @@
 .panelHeader p { margin: 4px 0 0; color: var(--staff-secondary); font-size: 11px; line-height: 1.45; }
 .aiPanel { display: grid; gap: 2px; }
 .assistantClosed { display: none; }
-.assistantDrawer { position: fixed; z-index: 1001; inset: 0 0 0 auto; display: grid; align-content: start; width: min(440px, 100vw); height: 100dvh; gap: 8px; overflow: auto; padding: 22px; border-radius: 14px 0 0 14px; box-shadow: -16px 0 50px #20171433; }
+.assistantDrawer { position: fixed; z-index: 1001; inset: 0 0 0 auto; display: grid; align-content: start; width: min(440px, 100vw); height: 100dvh; gap: 8px; overflow: auto; padding: 22px; border-radius: 14px 0 0 14px; box-shadow: -16px 0 50px #20171433; transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.assistantDrawer.assistantExpanded { width: min(860px, 100vw); }
 .assistantBackdrop { position: fixed; z-index: 1000; inset: 0; width: 100%; height: 100%; border: 0; background: #20171466; cursor: default; }
-.closeAssistant { width: 36px; height: 36px; border: 1px solid var(--brand-stone); border-radius: 50%; background: #FFFCF8; color: var(--staff-ink); font-size: 23px; cursor: pointer; }
+.aiHeaderActions { display: flex; align-items: center; gap: 8px; }
+.expandAssistant,
+.closeAssistant { width: 36px; height: 36px; border: 1px solid var(--brand-stone); border-radius: 50%; background: #FFFCF8; color: var(--staff-ink); cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+.expandAssistant { display: grid; place-items: center; }
+.expandAssistant:hover,
+.closeAssistant:hover { border-color: var(--brand-oxblood); background: #F4E8E5; color: var(--brand-oxblood); }
+.expandAssistant:focus-visible,
+.closeAssistant:focus-visible { outline: 2px solid var(--brand-oxblood); outline-offset: 2px; }
+.closeAssistant { font-size: 23px; line-height: 1; }
+.assistantExpanded .chatTranscript { max-height: calc(100dvh - 310px); }
 .askFlowcut { position: fixed; z-index: 900; right: 24px; bottom: 22px; min-height: 46px; padding: 0 18px; border: 1px solid var(--brand-oxblood); border-radius: 999px; background: var(--brand-oxblood); color: #FFFCF8; box-shadow: 0 5px 18px #20171426; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
 .askFlowcut:hover { background: #642F30; }
 .aiHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; }

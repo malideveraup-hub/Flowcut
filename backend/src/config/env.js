@@ -7,6 +7,21 @@ dotenv.config();
 // immediately at startup instead of limping along and failing confusingly
 // later (Section 2/17: "the server should fail clearly").
 const REQUIRED_VARS = ['MONGODB_URI', 'JWT_SECRET'];
+const DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES = 30;
+const DEFAULT_AUTH_SESSION_MAX_LIFETIME_DAYS = 7;
+
+function positiveIntegerEnv(name, fallback, maximum) {
+  const raw = process.env[name];
+  if (raw == null || raw.trim() === '') return fallback;
+  if (!/^\d+$/.test(raw.trim())) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) {
+    throw new Error(`${name} must be between 1 and ${maximum}.`);
+  }
+  return value;
+}
 
 function getCorsOrigins() {
   const configuredOrigins = (process.env.CORS_ORIGIN || '')
@@ -72,6 +87,16 @@ function loadEnv() {
 
   const nodeEnv = process.env.NODE_ENV || 'development';
   const frontendUrl = getFrontendUrl(nodeEnv);
+  const authSessionIdleTimeoutMinutes = positiveIntegerEnv(
+    'AUTH_SESSION_IDLE_TIMEOUT_MINUTES',
+    DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+    24 * 60
+  );
+  const authSessionMaxLifetimeDays = positiveIntegerEnv(
+    'AUTH_SESSION_MAX_LIFETIME_DAYS',
+    DEFAULT_AUTH_SESSION_MAX_LIFETIME_DAYS,
+    365
+  );
 
   return {
     nodeEnv,
@@ -79,6 +104,8 @@ function loadEnv() {
     mongoUri: process.env.MONGODB_URI,
     jwtSecret: process.env.JWT_SECRET,
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    authSessionIdleTimeoutMs: authSessionIdleTimeoutMinutes * 60 * 1000,
+    authSessionMaxLifetimeMs: authSessionMaxLifetimeDays * 24 * 60 * 60 * 1000,
     corsOrigins: getCorsOrigins(),
     smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
     smtpPort: Number(process.env.SMTP_PORT) || 587,

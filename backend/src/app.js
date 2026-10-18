@@ -33,6 +33,13 @@ export function createApp() {
         callback(null, allowedOrigin);
       },
       credentials: true,
+      exposedHeaders: [
+        'X-FlowCut-Idle-Expires-At',
+        'X-FlowCut-Absolute-Expires-At',
+        'X-FlowCut-Idle-Remaining-Ms',
+        'X-FlowCut-Absolute-Remaining-Ms',
+        'X-FlowCut-Session-Activity',
+      ],
     })
   );
   app.use(express.json({ limit: '100kb' }));
