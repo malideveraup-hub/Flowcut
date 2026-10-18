@@ -1,0 +1,77 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import mongoose from 'mongoose';
+import { env } from './config/env.js';
+import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
+import { noStoreApiResponse } from './middleware/noStoreApiResponse.js';
+import { isLocalDevelopmentOrigin } from './utils/localDevelopmentOrigin.js';
+import authRoutes from './routes/authRoutes.js';
+import shopRoutes from './routes/shopRoutes.js';
+import queueRoutes from './routes/queueRoutes.js';
+import shopAdminRoutes from './routes/shopAdminRoutes.js';
+import barberRoutes from './routes/barberRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import mapImageRoutes from './routes/mapImageRoutes.js';
+
+export function createApp() {
+  const app = express();
+  app.set('trust proxy', 1);
+
+  app.use(helmet());
+  app.use(
+    cors({
+      // Use an exact allowlist so credentialed requests never need a wildcard.
+      origin: (requestOrigin, callback) => {
+        const allowedOrigin =
+          env.corsOrigins.includes(requestOrigin) ||
+          (env.nodeEnv !== 'production' && isLocalDevelopmentOrigin(requestOrigin))
+            ? requestOrigin
+            : false;
+        callback(null, allowedOrigin);
+      },
+      credentials: true,
+    })
+  );
+  app.use(express.json({ limit: '100kb' }));
+  app.use(cookieParser());
+
+  // Health check: reports whether the API process is up AND whether it
+  // currently has a live MongoDB connection — deliberately two different
+  // things, so "the server responds" is never mistaken for "data is
+  // actually being persisted" (Section 19: don't fake success).
+  app.get('/api/health', (req, res) => {
+    const dbState = mongoose.connection.readyState; // 0=disconnected,1=connected,2=connecting,3=disconnecting
+    res.json({
+      success: true,
+      message: 'FlowCut API is running',
+      db: {
+        connected: dbState === 1,
+        state: ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown',
+      },
+    });
+  });
+
+  // Queue and barber responses include live, user-specific service state.
+  // Do not let browsers or intermediary caches replay an earlier timer.
+  app.use('/api/queue', noStoreApiResponse);
+  app.use('/api/barber', noStoreApiResponse);
+  app.use('/api/shops/:shopId/queue', noStoreApiResponse);
+
+  // Feature routes.
+  app.use('/api/auth', authRoutes);
+  app.use('/api/shops', shopRoutes);
+  app.use('/api/queue', queueRoutes);
+  app.use('/api/shop-admin', shopAdminRoutes);
+  app.use('/api/barber', barberRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/map-images', mapImageRoutes);
+  app.use('/api/notifications', notificationRoutes);
+
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+
+  return app;
+}

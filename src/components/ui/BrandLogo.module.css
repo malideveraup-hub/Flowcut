@@ -1,0 +1,42 @@
+.brand {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.mark {
+  position: relative;
+  display: block;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 9px;
+  background: #F7F4EE;
+}
+
+.mark::after {
+  position: absolute;
+  inset: 7px;
+  border-radius: 4px;
+  background: #20201E;
+  content: '';
+}
+
+.light .mark {
+  background: #783B3B;
+}
+
+.light .mark::after {
+  background: #F7F4EE;
+}
+
+.wordmark {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

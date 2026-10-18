@@ -1,0 +1,64 @@
+.sectionLabel {
+  font-family: var(--font-pixel);
+  font-size: var(--pixel-label);
+  color: var(--customer-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.intro {
+  font-size: var(--text-body-sm);
+  color: var(--customer-muted);
+  margin: 0 0 var(--space-5);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: var(--space-5);
+}
+
+.card {
+  background: var(--customer-surface);
+  border: 2px solid var(--customer-surface-border);
+  border-radius: var(--radius-pixel);
+  padding: var(--space-4) var(--space-2);
+  text-align: center;
+}
+
+.best {
+  border-color: var(--customer-teal);
+}
+
+.cardTitle {
+  font-family: var(--font-pixel);
+  font-size: var(--pixel-label);
+  color: var(--customer-muted);
+  margin-bottom: var(--space-3);
+}
+
+.bestTitle {
+  color: var(--customer-teal);
+}
+
+.cardNum {
+  font-family: var(--font-pixel);
+  font-size: 15px;
+  color: var(--customer-cream);
+  margin-bottom: 6px;
+}
+
+.cardSub {
+  font-size: var(--text-caption);
+  color: var(--customer-muted);
+}
+
+.footnote {
+  font-size: var(--text-caption);
+  color: var(--customer-muted);
+  line-height: 1.6;
+}
+
+@media (max-width: 380px) {
+  .grid { grid-template-columns: 1fr; }
+}

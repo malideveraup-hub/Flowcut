@@ -1,0 +1,45 @@
+.wrap {
+  text-align: left;
+}
+
+.number {
+  font-weight: 700;
+  line-height: 1.1;
+}
+.number.md { font-size: var(--text-display-lg); }
+.number.sm { font-size: var(--text-display-sm); }
+
+.unit {
+  font-size: 0.5em;
+  font-weight: 600;
+}
+
+.label {
+  font-size: var(--text-body-sm);
+  margin: 2px 0 8px;
+}
+
+.tagRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hint {
+  font-size: var(--text-caption);
+}
+
+/* clean skin */
+.clean .number { color: var(--staff-ink); }
+.clean .label { color: var(--staff-secondary); }
+.clean .hint { color: var(--staff-secondary); }
+
+/* pixel skin */
+.pixel .number {
+  font-family: var(--font-pixel);
+  font-size: var(--pixel-number);
+  color: var(--customer-amber);
+}
+.pixel .label { color: var(--customer-muted); }
+.pixel .hint { color: var(--customer-muted); }

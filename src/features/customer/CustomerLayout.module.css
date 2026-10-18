@@ -1,0 +1,94 @@
+.shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--customer-ink);
+}
+
+.main {
+  flex: 1;
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.landingMain {
+  max-width: none;
+  padding: 0;
+}
+
+.discoveryMain {
+  max-width: none;
+  padding: 0;
+}
+
+.guideMain {
+  max-width: none;
+  padding: 0;
+}
+
+.publicQueueMain {
+  max-width: none;
+  padding: 0;
+}
+
+.profileMain {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+.shopDetailsMain {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+.joinMain {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+@media (min-width: 900px) {
+  .main {
+    max-width: 720px;
+    padding: var(--space-6);
+  }
+
+  .landingMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .discoveryMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .guideMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .publicQueueMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .profileMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .shopDetailsMain {
+    max-width: none;
+    padding: 0;
+  }
+
+  .joinMain {
+    max-width: none;
+    padding: 0;
+  }
+}

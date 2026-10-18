@@ -1,0 +1,45 @@
+.sectionLabel {
+  font-family: var(--font-pixel);
+  font-size: var(--pixel-label);
+  color: var(--customer-muted);
+  margin: 0 0 var(--space-3);
+}
+
+.viewfinder {
+  position: relative;
+  aspect-ratio: 1;
+  max-width: 280px;
+  margin: 0 auto var(--space-4);
+  background: var(--customer-surface);
+  border: 2px solid var(--customer-surface-border);
+  border-radius: var(--radius-pixel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--customer-amber);
+}
+
+.placeholderText {
+  text-align: center;
+  font-size: var(--text-caption);
+  color: var(--customer-muted);
+}
+
+.explain {
+  font-size: var(--text-caption);
+  color: var(--customer-muted);
+  line-height: 1.6;
+  margin: 0 0 var(--space-4);
+  text-align: center;
+}
+
+.manualForm {
+  margin-bottom: var(--space-3);
+}

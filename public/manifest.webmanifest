@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "FlowCut - Smart Barbershop Queues",
+  "short_name": "FlowCut",
+  "description": "Join a barbershop queue and get live wait updates from FlowCut.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone"],
+  "background_color": "#090812",
+  "theme_color": "#090812",
+  "icons": [
+    { "src": "/flowcut-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/flowcut-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

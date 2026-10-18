@@ -1,0 +1,135 @@
+.shell {
+  min-height: 100vh;
+  color: #292723;
+  background: var(--brand-ivory);
+}
+
+.topbar {
+  position: sticky;
+  z-index: 30;
+  top: 0;
+  border-bottom: 1px solid #DDD5C8;
+  background: #20201E;
+  backdrop-filter: blur(12px);
+}
+
+.topbarInner {
+  display: flex;
+  width: min(94%, 1200px);
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 auto;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #F7F4EE;
+  font-family: 'Space Grotesk', var(--font-sans);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: .035em;
+}
+
+.mark {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #FFFDFA;
+}
+
+.mark::after {
+  position: absolute;
+  inset: 8px;
+  border-radius: 5px;
+  background: #20201E;
+  content: '';
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--brand-oxblood);
+  color: var(--brand-ivory);
+  font-family: 'Space Grotesk', var(--font-sans);
+  font-weight: 700;
+}
+
+.name {
+  max-width: 220px;
+  overflow: hidden;
+  color: #F7F4EE;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #DDD5C8;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .04);
+  color: #F7F4EE;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background .18s ease, border-color .18s ease;
+}
+
+.logout:hover {
+  border-color: #A58B66;
+  background: rgba(165, 139, 102, .2);
+  color: #F7F4EE;
+}
+
+.logout:focus-visible {
+  outline: 2px solid #783B3B;
+  outline-offset: 3px;
+}
+
+.main {
+  width: min(94%, 1200px);
+  margin: 0 auto;
+  padding: 25px 0 56px;
+}
+
+.logoutCopy {
+  margin: 0;
+  color: #6F6A62;
+}
+
+.logoutActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 600px) {
+  .topbarInner,
+  .main { width: calc(100% - 28px); }
+
+  .name { display: none; }
+
+  .main { padding-top: 20px; }
+
+  .logoutActions { flex-direction: column-reverse; }
+  .logoutActions > button { width: 100%; }
+}

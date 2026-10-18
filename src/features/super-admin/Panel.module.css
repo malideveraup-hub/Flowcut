@@ -1,0 +1,67 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-4);
+}
+
+.title {
+  font-size: var(--text-display-sm);
+  margin: 0 0 2px;
+}
+
+.sub {
+  font-size: var(--text-body-sm);
+  color: var(--staff-secondary);
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.action {
+  background: none;
+  border: none;
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--staff-accent);
+  padding: 0;
+}
+
+.actionDanger {
+  background: none;
+  border: none;
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--staff-danger);
+  padding: 0;
+}
+
+.viewLink {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--staff-accent);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-4);
+}
+
+.label {
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+}
+
+.select {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-staff-control);
+  border: 1.5px solid var(--staff-line);
+  font-size: var(--text-body);
+  background: #fff;
+}

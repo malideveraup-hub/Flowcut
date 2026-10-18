@@ -1,0 +1,116 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: none;
+  font-weight: 600;
+  transition: transform 0.05s ease, opacity 0.15s ease;
+}
+
+.button:active {
+  transform: scale(0.98);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--brand-brass);
+  outline-offset: 3px;
+}
+
+.button:disabled {
+  opacity: 1;
+  filter: grayscale(.45);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* sizes */
+.md { padding: 12px 20px; font-size: var(--text-body); }
+.lg { padding: 16px 20px; font-size: 16px; }
+.sm { padding: 8px 14px; font-size: var(--text-body-sm); }
+
+/* ---- clean skin (Barber / Admin) ---- */
+.clean.primary {
+  background: var(--staff-accent);
+  color: var(--brand-ivory);
+  border-radius: var(--radius-staff-control);
+}
+.clean.primary:hover { background: #642F30; }
+
+.clean.secondary {
+  background: #fff;
+  color: var(--staff-ink);
+  border: 1.5px solid var(--staff-line);
+  border-radius: var(--radius-staff-control);
+}
+.clean.secondary:hover { background: var(--staff-page); }
+
+.clean.ghost {
+  background: transparent;
+  color: var(--staff-accent);
+  border-radius: var(--radius-staff-control);
+}
+.clean.ghost:hover { background: var(--staff-accent-soft); }
+
+.clean.destructive {
+  background: var(--staff-danger);
+  color: var(--brand-ivory);
+  border-radius: var(--radius-staff-control);
+}
+
+/* success variant used for the Barber "Finish service" action */
+.clean.success {
+  background: var(--staff-success);
+  color: var(--brand-ivory);
+  border-radius: var(--radius-staff-control);
+}
+
+.clean.success:hover { background: #1C6244; }
+.clean.destructive:hover { background: #96322F; }
+
+/* ---- pixel skin (Customer) ---- */
+.pixel.primary {
+  background: var(--brand-oxblood);
+  color: var(--brand-ivory);
+  border: 3px solid var(--customer-cream);
+  box-shadow: 4px 4px 0 #0b0a12;
+  font-family: var(--font-pixel);
+  font-size: var(--pixel-label);
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-pixel);
+  text-transform: uppercase;
+}
+.pixel.primary:active {
+  box-shadow: 2px 2px 0 #0b0a12;
+  transform: translate(2px, 2px);
+}
+.pixel.primary:hover { background: #642F30; }
+
+.pixel.secondary {
+  background: var(--customer-surface);
+  color: var(--customer-cream);
+  border: 2px solid var(--customer-surface-border);
+  border-radius: var(--radius-pixel);
+  font-weight: 600;
+}
+.pixel.secondary:hover { background: #F4EFE7; }
+
+.pixel.ghost {
+  background: transparent;
+  color: var(--customer-cream);
+  border: 2px solid var(--customer-surface-border);
+  border-radius: var(--radius-pixel);
+}
+.pixel.ghost:hover { background: #F0E2DE; }
+
+.pixel.destructive {
+  background: var(--customer-coral);
+  color: var(--brand-ivory);
+  border: 2px solid var(--customer-ink);
+  border-radius: var(--radius-pixel);
+}
+.pixel.destructive:hover { background: #96322F; }

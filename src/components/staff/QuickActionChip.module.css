@@ -1,0 +1,16 @@
+.chip {
+  flex: 1;
+  text-align: center;
+  background: #fff;
+  border: 1.5px solid var(--staff-line);
+  border-radius: var(--radius-staff-control);
+  padding: 14px 4px;
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  color: var(--staff-ink);
+  min-height: 48px;
+}
+
+.chip:active {
+  background: var(--staff-page);
+}

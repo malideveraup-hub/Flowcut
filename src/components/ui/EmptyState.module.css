@@ -1,0 +1,41 @@
+.wrap {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  border-radius: var(--radius-staff-card);
+}
+
+.clean {
+  background: var(--staff-page);
+  color: var(--staff-ink);
+}
+
+.pixel {
+  background: var(--customer-surface);
+  border: 2px dashed var(--customer-surface-border);
+  color: var(--customer-cream);
+}
+
+.title {
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.body {
+  font-size: var(--text-body-sm);
+  color: var(--staff-secondary);
+  margin: 0 0 var(--space-3);
+}
+
+.pixel .body {
+  color: var(--customer-muted);
+}
+
+.action {
+  background: var(--staff-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-staff-control);
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: var(--text-body-sm);
+}

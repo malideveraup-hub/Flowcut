@@ -1,0 +1,226 @@
+.sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  background: var(--staff-page);
+  border-right: 1px solid var(--staff-line);
+  padding: var(--space-4) var(--space-3);
+}
+
+.logo {
+  font-size: var(--text-body);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.subtitle {
+  font-size: var(--text-caption);
+  color: var(--staff-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.item {
+  display: block;
+  padding: 9px 10px;
+  border-radius: var(--radius-staff-control);
+  margin-bottom: 2px;
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--staff-secondary);
+  text-decoration: none;
+}
+
+.item.active {
+  background: var(--staff-accent-soft);
+  color: var(--staff-accent);
+  font-weight: 600;
+}
+
+.superAdmin {
+  position: sticky;
+  top: 0;
+  display: flex;
+  width: 248px;
+  height: 100vh;
+  flex-direction: column;
+  padding: 23px 15px 16px;
+  border: 0;
+  background: #20201E;
+  color: #DDD5C8;
+}
+
+.superAdmin .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 8px 6px;
+  color: #fff;
+  font-size: 19px;
+}
+
+.logoMark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: #fff;
+  color: #783B3B;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.role {
+  align-self: flex-start;
+  margin: 9px 8px 19px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #783B3B;
+  color: #F7F4EE;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.navLabel {
+  padding: 14px 11px 6px;
+  color: #DDD5C8;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.superAdmin .item {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+  padding: 0 11px;
+  border-radius: 7px;
+  color: #DDD5C8;
+  font-size: 12px;
+}
+
+.superAdmin .item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.superAdmin .item.active {
+  background: #783B3B;
+  color: #fff;
+  box-shadow: 0 7px 16px -8px rgba(32, 32, 30, .75);
+}
+
+.superAdmin .item svg,
+.logout svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.account {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+  padding: 14px 7px 0;
+  border-top: 1px solid #DDD5C8;
+}
+
+.accountText strong,
+.accountText span {
+  display: block;
+}
+
+.accountText strong {
+  overflow-wrap: anywhere;
+  color: #fff;
+  font-size: 12px;
+}
+
+.accountText span {
+  margin-top: 3px;
+  color: #DDD5C8;
+  font-size: 10px;
+}
+
+.logout {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  color: #DDD5C8;
+  font-size: 11px;
+  text-align: left;
+}
+
+.logout:hover {
+  color: #fff;
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--staff-line);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    overflow-x: auto;
+    padding: var(--space-2) var(--space-3);
+  }
+  .logo, .subtitle { display: none; }
+  .item { margin-bottom: 0; white-space: nowrap; }
+  .sidebar nav { display: flex; gap: 4px; }
+
+  .superAdmin {
+    width: 248px;
+    flex: 0 0 248px;
+    align-items: stretch;
+    gap: 0;
+    overflow: visible;
+    border: 0;
+    padding: 23px 15px 16px;
+  }
+
+  .superAdmin .logo { display: flex; }
+  .superAdmin .role { display: block; }
+  .superAdmin .nav { display: flex; flex-direction: column; gap: 4px; }
+  .superAdmin .item { white-space: normal; }
+}
+
+@media (max-width: 860px) {
+  .superAdmin {
+    position: fixed;
+    z-index: 51;
+    left: 0;
+    width: min(280px, calc(100vw - 48px));
+    flex: none;
+    transform: translateX(-105%);
+    transition: transform 220ms ease;
+    box-shadow: 18px 0 38px rgba(22, 17, 45, 0.24);
+  }
+
+  .superAdmin.open {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .superAdmin { transition: none; }
+}

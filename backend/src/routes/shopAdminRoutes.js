@@ -1,0 +1,62 @@
+import { Router } from 'express';
+import express from 'express';
+import * as shopController from '../controllers/shopController.js';
+import * as serviceController from '../controllers/serviceController.js';
+import * as barberController from '../controllers/barberController.js';
+import * as queueController from '../controllers/queueController.js';
+import * as mapImageController from '../controllers/mapImageController.js';
+import * as analyticsController from '../controllers/analyticsController.js';
+import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
+import { noStoreApiResponse } from '../middleware/noStoreApiResponse.js';
+import { analyticsChatLimiter, analyticsInsightsLimiter } from '../middleware/rateLimiters.js';
+import { validateObjectIdParam } from '../utils/mongoId.js';
+
+const router = Router();
+
+// Every route below requires an authenticated shop_admin. Every
+// controller behind this reads req.user.shopId (set by requireAuth from
+// the DATABASE record) — never a shopId param/body value — which is the
+// actual multi-shop isolation guarantee (Section 3/13).
+router.use(requireAuth, requireRole('shop_admin'));
+
+router.get('/map-images', mapImageController.listAdminMapImages);
+router.post('/map-images', mapImageController.createMapImageDraft);
+router.get('/map-images/:imageId/image', mapImageController.validateMapImageId, mapImageController.getAdminMapImage);
+router.post(
+  '/map-images/:imageId/image',
+  mapImageController.validateMapImageId,
+  express.raw({ type: () => true, limit: '5mb' }),
+  mapImageController.replaceMapImageFile
+);
+router.patch('/map-images/:imageId', mapImageController.validateMapImageId, mapImageController.updateMapImage);
+router.patch('/map-images/:imageId/publication', mapImageController.validateMapImageId, mapImageController.setMapImagePublication);
+router.delete('/map-images/:imageId', mapImageController.validateMapImageId, mapImageController.deleteMapImage);
+
+router.get('/shop', shopController.getOwnShop);
+router.get('/dashboard-summary', shopController.getOwnShopDashboardSummary);
+router.get('/analytics', noStoreApiResponse, analyticsController.getOwnShopAnalytics);
+router.post('/analytics/insights', noStoreApiResponse, analyticsInsightsLimiter, analyticsController.getOwnShopAnalyticsInsights);
+router.post('/analytics/chat', noStoreApiResponse, analyticsChatLimiter, analyticsController.chatWithOwnShopAnalytics);
+router.get('/qr', shopController.getOwnShopQueueQr);
+router.patch('/shop', shopController.updateOwnShop);
+
+router.get('/services', serviceController.listOwnServices);
+router.post('/services', serviceController.createService);
+router.patch('/services/:serviceId', validateObjectIdParam('serviceId'), serviceController.updateService);
+router.patch('/services/:serviceId/status', validateObjectIdParam('serviceId'), serviceController.setServiceStatus);
+
+router.get('/barbers', barberController.listShopBarbers);
+router.post('/barbers', barberController.createBarber);
+router.patch('/barbers/:barberId', validateObjectIdParam('barberId'), barberController.updateBarberStatus);
+
+router.get('/queue/board', queueController.getShopQueueBoard);
+router.get('/queue', queueController.getShopQueue);
+router.patch('/queue/status', queueController.setShopQueueOpen);
+router.post('/queue', queueController.addWalkIn);
+router.patch('/queue/:entryId', validateObjectIdParam('entryId'), queueController.updateShopQueueEntry);
+router.patch('/queue/:entryId/complete', validateObjectIdParam('entryId'), queueController.completeShopQueueEntry);
+router.patch('/queue/:entryId/move', validateObjectIdParam('entryId'), queueController.moveShopQueueEntry);
+router.patch('/queue/:entryId/skip', validateObjectIdParam('entryId'), queueController.skipEntry);
+router.patch('/queue/:entryId/cancel', validateObjectIdParam('entryId'), queueController.cancelEntryByStaff);
+
+export default router;

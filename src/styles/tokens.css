@@ -1,0 +1,73 @@
+/* FlowCut palette and shared UI tokens. */
+:root {
+  --brand-charcoal: #20201E;
+  --brand-ivory: #F7F4EE;
+  --brand-oxblood: #783B3B;
+  --brand-stone: #DDD5C8;
+  --brand-brass: #A58B66;
+
+  --color-page: var(--brand-ivory);
+  --color-surface: #FFFDFA;
+  --color-surface-raised: #FFFFFF;
+  --color-text: #292723;
+  --color-muted: #6F6A62;
+  --color-border: var(--brand-stone);
+  --color-action: var(--brand-oxblood);
+  --color-action-hover: #642F30;
+
+  --customer-ink: var(--brand-ivory);
+  --customer-surface: #FFFDFA;
+  --customer-surface-border: var(--brand-stone);
+  --customer-cream: #292723;
+  --customer-red: var(--brand-oxblood);
+  --customer-blue: #5C5146;
+  --customer-amber: #94600D;
+  --customer-teal: #24724F;
+  --customer-coral: #B33A35;
+  --customer-muted: #6F6A62;
+
+  --staff-ink: #292723;
+  --staff-secondary: #6F6A62;
+  --staff-paper: #FFFDFA;
+  --staff-page: var(--brand-ivory);
+  --staff-line: var(--brand-stone);
+  --staff-line-soft: #EDE6DC;
+  --staff-accent: var(--brand-oxblood);
+  --staff-accent-soft: #F0E2DE;
+  --staff-success: #24724F;
+  --staff-success-soft: #E2F0E7;
+  --staff-warning: #94600D;
+  --staff-warning-soft: #F7EBD3;
+  --staff-danger: #B33A35;
+  --staff-danger-soft: #F8E5E1;
+
+  --congestion-low: var(--customer-teal);
+  --congestion-low-staff: var(--staff-success);
+  --congestion-moderate: var(--customer-amber);
+  --congestion-moderate-staff: var(--staff-warning);
+  --congestion-high: var(--customer-coral);
+  --congestion-high-staff: var(--staff-danger);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --radius-pixel: 6px;
+  --radius-staff-card: 10px;
+  --radius-staff-control: 7px;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-pixel: var(--font-sans);
+  --text-display-lg: 34px;
+  --text-display-sm: 24px;
+  --text-heading: 18px;
+  --text-body: 15px;
+  --text-body-sm: 13px;
+  --text-caption: 11px;
+  --pixel-hero: 30px;
+  --pixel-number: 26px;
+  --pixel-label: 11px;
+}

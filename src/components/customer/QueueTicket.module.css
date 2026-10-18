@@ -1,0 +1,35 @@
+.ticket {
+  background: var(--customer-surface);
+  border: 2px solid var(--customer-surface-border);
+  border-radius: var(--radius-pixel);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  margin-bottom: var(--space-4);
+}
+
+.shopName {
+  font-size: var(--text-caption);
+  color: var(--customer-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.position {
+  font-family: var(--font-pixel);
+  font-size: 32px;
+  color: var(--customer-cream);
+  margin-bottom: 10px;
+}
+
+.wait {
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  color: var(--customer-amber);
+}
+
+.waitLabel {
+  font-size: var(--text-caption);
+  color: var(--customer-muted);
+  margin-top: 4px;
+}

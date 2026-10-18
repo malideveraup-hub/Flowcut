@@ -1,0 +1,27 @@
+.badge {
+  display: inline-block;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* clean skin: soft-tint pill, used on Barber/Admin screens */
+.clean {
+  font-size: var(--text-caption);
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+.clean.low { background: var(--staff-success-soft); color: var(--staff-success); }
+.clean.moderate { background: var(--staff-warning-soft); color: var(--staff-warning); }
+.clean.high { background: var(--staff-danger-soft); color: var(--staff-danger); }
+
+/* pixel skin: chunky tag, used on Customer screens */
+.pixel {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  padding: 4px 6px;
+  border-radius: 2px;
+  color: var(--customer-ink);
+}
+.pixel.low { background: var(--customer-teal); }
+.pixel.moderate { background: var(--customer-amber); }
+.pixel.high { background: var(--customer-coral); color: var(--customer-cream); }

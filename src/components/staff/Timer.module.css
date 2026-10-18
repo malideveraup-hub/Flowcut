@@ -1,0 +1,8 @@
+.timer {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--staff-ink);
+}
+
+.lg { font-size: var(--text-display-lg); }
+.md { font-size: var(--text-display-sm); }
