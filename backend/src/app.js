@@ -39,6 +39,8 @@ export function createApp() {
         'X-FlowCut-Idle-Remaining-Ms',
         'X-FlowCut-Absolute-Remaining-Ms',
         'X-FlowCut-Session-Activity',
+        'Retry-After',
+        'X-Request-ID',
       ],
     })
   );

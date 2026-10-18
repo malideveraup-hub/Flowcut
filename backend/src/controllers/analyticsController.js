@@ -18,7 +18,7 @@ export const getOwnShopAnalytics = createOwnShopAnalyticsHandler();
 export function createOwnShopAnalyticsInsightsHandler(generateInsights = analyticsInsightsService.generateOwnShopAnalyticsInsights) {
   return async function getOwnShopAnalyticsInsights(req, res, next) {
     try {
-      const insights = await generateInsights(req.user.shopId, req.body || {});
+      const insights = await generateInsights(req.user.shopId, req.body || {}, { requestId: req.geminiRequestId });
       res.json({ success: true, data: insights });
     } catch (err) {
       next(err);
@@ -31,7 +31,7 @@ export const getOwnShopAnalyticsInsights = createOwnShopAnalyticsInsightsHandler
 export function createOwnShopAnalyticsChatHandler(askAnalytics = analyticsChatService.askOwnShopAnalytics) {
   return async function chatWithOwnShopAnalytics(req, res, next) {
     try {
-      const answer = await askAnalytics(req.user.shopId, req.body || {});
+      const answer = await askAnalytics(req.user.shopId, req.body || {}, { requestId: req.geminiRequestId });
       res.json({ success: true, data: answer });
     } catch (err) {
       next(err);

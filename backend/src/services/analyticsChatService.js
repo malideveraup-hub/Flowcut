@@ -42,14 +42,16 @@ function evidenceSources(analytics, context) {
   analytics.waitDistribution.forEach((bin, index) => add(`wait_bin_${index}`, `Actual waits ${bin.label} (${analytics.summary.waitSampleCount} observations)`, `${bin.count} (${Number(bin.percent ?? 0).toFixed(1)}%)`));
   analytics.estimateErrorDistribution.forEach((bin, index) => add(`estimate_bin_${index}`, `Saved-estimate error ${bin.label} (${analytics.summary.estimateSampleCount} pairs)`, `${bin.count} (${Number(bin.percent ?? 0).toFixed(1)}%)`));
   analytics.serviceStats.slice(0, MAX_NAMED_AGGREGATES).forEach((service, index) => {
-    const duration = `duration n=${service.sampleCount}; avg=${Number.isFinite(service.averageMinutes) ? `${service.averageMinutes} min` : 'N/A'}; median=${Number.isFinite(service.medianMinutes) ? `${service.medianMinutes} min` : 'N/A'}; P80=${Number.isFinite(service.percentile80Minutes) ? `${service.percentile80Minutes} min` : 'N/A'}; outliers=${service.outlierCount}`;
+    const commonDurations = service.mostCommonDurations?.map(({ minutes, count }) => `${minutes} min (${count})`).join(', ') || 'N/A';
+    const duration = `duration n=${service.sampleCount}; avg=${Number.isFinite(service.averageMinutes) ? `${service.averageMinutes} min` : 'N/A'}; median=${Number.isFinite(service.medianMinutes) ? `${service.medianMinutes} min` : 'N/A'}; most common=${commonDurations}; P80=${Number.isFinite(service.percentile80Minutes) ? `${service.percentile80Minutes} min` : 'N/A'}; outliers=${service.outlierCount}`;
     add(`service_${index}`, `Service ${service.serviceName}`, `${service.completedCount} completed; ${duration}`);
   });
   if (analytics.serviceStats.length > MAX_NAMED_AGGREGATES) {
     add('service_stats_omitted', 'Service breakdown coverage', `${analytics.serviceStats.length - MAX_NAMED_AGGREGATES} additional service categories are omitted; use the Service filter to inspect one directly.`);
   }
   analytics.barberStats.slice(0, MAX_NAMED_AGGREGATES).forEach((barber, index) => {
-    const duration = `duration n=${barber.sampleCount}; avg=${Number.isFinite(barber.averageMinutes) ? `${barber.averageMinutes} min` : 'N/A'}; median=${Number.isFinite(barber.medianMinutes) ? `${barber.medianMinutes} min` : 'N/A'}; P80=${Number.isFinite(barber.percentile80Minutes) ? `${barber.percentile80Minutes} min` : 'N/A'}; outliers=${barber.outlierCount}`;
+    const commonDurations = barber.mostCommonDurations?.map(({ minutes, count }) => `${minutes} min (${count})`).join(', ') || 'N/A';
+    const duration = `duration n=${barber.sampleCount}; avg=${Number.isFinite(barber.averageMinutes) ? `${barber.averageMinutes} min` : 'N/A'}; median=${Number.isFinite(barber.medianMinutes) ? `${barber.medianMinutes} min` : 'N/A'}; most common=${commonDurations}; P80=${Number.isFinite(barber.percentile80Minutes) ? `${barber.percentile80Minutes} min` : 'N/A'}; outliers=${barber.outlierCount}`;
     add(`barber_${index}`, `Barber ${barber.barberName}`, `${barber.completedCount} completed; ${duration}`);
   });
   if (analytics.barberStats.length > MAX_NAMED_AGGREGATES) {
@@ -81,7 +83,7 @@ function evidenceSources(analytics, context) {
   return sources;
 }
 
-function chatSchema(sourceKeys = []) {
+function chatSchema() {
   const statement = {
     type: 'OBJECT',
     properties: {
@@ -125,7 +127,13 @@ export function validateAnalyticsChatInput(input = {}) {
   if (input.history != null && !Array.isArray(input.history)) {
     throw new AppError(400, 'Conversation history must be a list of recent messages.');
   }
-  const history = (input.history || []).slice(-MAX_HISTORY_MESSAGES).map((item) => {
+  if ((input.history || []).length > MAX_HISTORY_MESSAGES) {
+    throw new AppError(400, `Conversation history can contain at most ${MAX_HISTORY_MESSAGES} recent messages.`);
+  }
+  if (JSON.stringify(input).length > 12_000) {
+    throw new AppError(413, 'The question and selected filters are too large. Please shorten the message or conversation history.');
+  }
+  const history = (input.history || []).map((item) => {
     if (!item || !['user', 'assistant'].includes(item.role) || typeof item.content !== 'string' || item.content.length > MAX_HISTORY_MESSAGE_LENGTH) {
       throw new AppError(400, `Each recent message must have a valid role and be ${MAX_HISTORY_MESSAGE_LENGTH} characters or fewer.`);
     }
@@ -140,8 +148,8 @@ export function createAnalyticsChatService({
   apiKey = () => process.env.GEMINI_API_KEY,
   model = () => process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
 } = {}) {
-  return async function askOwnShopAnalytics(shopId, input = {}) {
-    const requestId = randomUUID();
+  return async function askOwnShopAnalytics(shopId, input = {}, { requestId: correlatedRequestId } = {}) {
+    const requestId = correlatedRequestId || randomUUID();
     const totalStart = Date.now();
     let retrievalMs = 0;
     let prepMs = 0;
@@ -153,7 +161,7 @@ export function createAnalyticsChatService({
     const resolvedModel = String(typeof model === 'function' ? model() || '' : model || '').trim();
     if (!resolvedApiKey) {
       console.warn('[analytics-gemini] missing_configuration', { requestId, variable: 'GEMINI_API_KEY' });
-      throw new AppError(503, 'AI analytics are not configured. Add GEMINI_API_KEY to the backend environment.');
+      throw new AppError(503, 'The AI assistant is temporarily unavailable. Please contact the administrator if the problem continues.', [], 'GEMINI_CONFIGURATION');
     }
 
     const filters = input.filters && typeof input.filters === 'object' && !Array.isArray(input.filters) ? input.filters : {};
@@ -204,7 +212,7 @@ export function createAnalyticsChatService({
     try {
       result = await requestGeminiJson({
         prompt: contents,
-        schema: { responseSchema: chatSchema(sources.map((source) => source.key)), systemInstruction },
+        schema: { responseSchema: chatSchema(), systemInstruction },
         apiKey: resolvedApiKey,
         model: resolvedModel,
         clientFactory,

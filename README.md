@@ -4,7 +4,7 @@ FlowCut is a multi-shop barbershop queue and waiting-time system with a React/Vi
 
 ## Run locally
 
-Install the frontend dependencies from the repository root and backend dependencies from `backend/`. Configure the backend by copying `backend/.env.example` to `backend/.env`, then set `MONGODB_URI` and `JWT_SECRET`. Set `GEMINI_API_KEY` to enable the optional Shop Admin analytics assistant. `GEMINI_MODEL` defaults to `gemini-3.8-flash`.
+Install the frontend dependencies from the repository root and backend dependencies from `backend/`. Configure the backend by copying `backend/.env.example` to `backend/.env`, then set `MONGODB_URI` and `JWT_SECRET`. Set `GEMINI_API_KEY` to enable the optional Shop Admin analytics assistant. `GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`.
 
 Run the API from `backend/` with `npm run dev` and the frontend from the repository root with `npm run dev`. The frontend uses `VITE_API_URL` when set; otherwise local development resolves the API on port 4000.
 

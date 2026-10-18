@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import express from 'express';
 import { test } from 'node:test';
 import { createOwnShopAnalyticsInsightsHandler } from '../src/controllers/analyticsController.js';
-import { analyticsInsightsLimiter } from '../src/middleware/rateLimiters.js';
+import { createGeminiRequestLimiter } from '../src/middleware/rateLimiters.js';
 import { createAnalyticsInsightsService, requestGeminiJson } from '../src/services/analyticsInsightsService.js';
 
 const shopId = '68a000000000000000000001';
@@ -14,8 +14,8 @@ const analytics = {
   hourly: [{ hour: 9, joined: 4 }],
   peakHours: { busiest: { hour: 9, count: 4 }, quietest: { hour: 10, count: 0 } },
   waitDistribution: [{ label: '15-<30 min', count: 8, percent: 66.7 }],
-  serviceStats: [{ serviceName: 'Classic cut', completedCount: 5, sampleCount: 5, averageMinutes: 31, medianMinutes: 30, percentile80Minutes: 36, outlierCount: 0, serviceId: 'private-id' }],
-  barberStats: [{ barberName: 'Alex', completedCount: 5, sampleCount: 5, averageMinutes: 31, medianMinutes: 30, percentile80Minutes: 36, outlierCount: 0, barberId: 'private-id', currentAvailability: 'AVAILABLE' }],
+  serviceStats: [{ serviceName: 'Classic cut', completedCount: 5, sampleCount: 5, averageMinutes: 31, medianMinutes: 30, percentile80Minutes: 36, mostCommonDurations: [{ minutes: 30, count: 3 }], outlierCount: 0, serviceId: 'private-id' }],
+  barberStats: [{ barberName: 'Alex', completedCount: 5, sampleCount: 5, averageMinutes: 31, medianMinutes: 30, percentile80Minutes: 36, mostCommonDurations: [{ minutes: 30, count: 3 }], outlierCount: 0, barberId: 'private-id', currentAvailability: 'AVAILABLE' }],
   explanations: ['Queue size snapshots are unavailable.'],
   records: [{ customerId: 'must-not-be-sent', customerEmail: 'private@example.test' }],
 };
@@ -100,6 +100,10 @@ test('Gemini receives only aggregate shop analytics and returns structured insig
   assert.equal(request.config.responseMimeType, 'application/json');
   assert.equal(request.config.maxOutputTokens, 1600);
   assert.match(prompt, /Classic cut/);
+  assert.match(prompt, /"customersServed":15/);
+  assert.match(prompt, /"averageWaitMinutes":22/);
+  assert.match(prompt, /"averageMinutes":31/);
+  assert.match(prompt, /"mostCommonDurations":\[\{"minutes":30,"count":3\}\]/);
   assert.doesNotMatch(prompt, /must-not-be-sent|private@example\.test|customerId|customerEmail/);
   assert.deepEqual(result.insights, modelResponse.insights);
   assert.deepEqual(result.range, analytics.range);
@@ -112,7 +116,7 @@ test('AI insights fail clearly when Gemini is not configured without reading sho
     apiKey: '',
     readAnalytics: async () => { analyticsRead = true; return analytics; },
   });
-  await assert.rejects(generate(shopId, {}), { statusCode: 503, message: /GEMINI_API_KEY/ });
+  await assert.rejects(generate(shopId, {}), { statusCode: 503, code: 'GEMINI_CONFIGURATION' });
   assert.equal(analyticsRead, false);
 });
 
@@ -120,9 +124,17 @@ test('Gemini provider failures and malformed responses become safe application e
   const base = { apiKey: 'test-key', readAnalytics: async () => analytics };
   const unavailable = createAnalyticsInsightsService({
     ...base,
-    clientFactory: () => ({ models: { generateContent: async () => { throw Object.assign(new Error('quota'), { status: 429 }); } } }),
+    clientFactory: () => ({ models: { generateContent: async () => { throw Object.assign(new Error('Daily project quota exceeded'), { status: 429, code: 'RESOURCE_EXHAUSTED' }); } } }),
   });
-  await assert.rejects(unavailable(shopId, {}), { statusCode: 503, message: /usage quota/ });
+  await assert.rejects(unavailable(shopId, {}), { statusCode: 503, code: 'GEMINI_QUOTA_EXHAUSTED' });
+
+  const billing = createAnalyticsInsightsService({
+    ...base,
+    clientFactory: () => ({ models: { generateContent: async () => {
+      throw Object.assign(new Error('Billing account is not linked to this project'), { status: 403, code: 'PERMISSION_DENIED' });
+    } } }),
+  });
+  await assert.rejects(billing(shopId, {}), { statusCode: 503, code: 'GEMINI_BILLING_CONFIGURATION' });
 
   const malformed = createAnalyticsInsightsService({
     ...base,
@@ -179,9 +191,9 @@ test('Gemini quota and rate-limit responses are not retried as if they were tran
     apiKey: 'test-key', model: 'gemini-3.8-flash',
     fetchImpl: async () => {
       quotaAttempts += 1;
-      return new Response(JSON.stringify({ error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Project quota exceeded' } }), { status: 429 });
+      return new Response(JSON.stringify({ error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Project daily quota exceeded' } }), { status: 429 });
     },
-  }), { statusCode: 503, message: /usage quota/ });
+  }), { statusCode: 503, code: 'GEMINI_QUOTA_EXHAUSTED' });
   assert.equal(quotaAttempts, 1);
 
   let rateLimitAttempts = 0;
@@ -190,10 +202,41 @@ test('Gemini quota and rate-limit responses are not retried as if they were tran
     apiKey: 'test-key', model: 'gemini-3.8-flash',
     fetchImpl: async () => {
       rateLimitAttempts += 1;
-      return new Response(JSON.stringify({ error: { code: 429, message: 'Too many requests' } }), { status: 429 });
+      return new Response(JSON.stringify({ error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded for requests per minute, limit: 15' } }), { status: 429, headers: { 'Retry-After': '12' } });
     },
-  }), { statusCode: 503, message: /temporarily rate limited/ });
+  }), (error) => error.statusCode === 503 && error.code === 'GEMINI_RATE_LIMIT' && error.retryAfterSeconds === 12);
   assert.equal(rateLimitAttempts, 1);
+});
+
+test('provider quota logs retain safe quota dimensions and retry delay without logging provider text', async () => {
+  const logs = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => logs.push(args);
+  try {
+    await assert.rejects(requestGeminiJson({
+      prompt: 'private prompt',
+      schema: { responseSchema: { type: 'OBJECT' } },
+      apiKey: 'private-test-key',
+      model: 'gemini-3.5-flash-lite',
+      fetchImpl: async () => new Response(JSON.stringify({ error: {
+        code: 429,
+        status: 'RESOURCE_EXHAUSTED',
+        message: 'Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 27, model: gemini-3.5-flash-lite. customer@example.test',
+      } }), { status: 429, headers: { 'Retry-After': '7' } }),
+    }), { code: 'GEMINI_QUOTA_EXHAUSTED' });
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.equal(logs.length, 1);
+  const [, entry] = logs[0];
+  assert.equal(entry.retryAfterSeconds, 7);
+  assert.deepEqual(entry.quotaDetails, [{
+    quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests',
+    quotaLimit: '27',
+    model: 'gemini-3.5-flash-lite',
+  }]);
+  assert.doesNotMatch(JSON.stringify(entry), /customer@example\.test|private-test-key|private prompt/);
 });
 
 test('Gemini distinguishes timeouts and oversized inputs without exposing provider text', async () => {
@@ -203,7 +246,7 @@ test('Gemini distinguishes timeouts and oversized inputs without exposing provid
     clientFactory: () => ({ models: { generateContent: async () => {
       throw Object.assign(new Error('private timeout payload should not be returned'), { name: 'TimeoutError', code: 'UND_ERR_CONNECT_TIMEOUT' });
     } } }),
-  }), { statusCode: 504, message: /timed out/ });
+  }), { statusCode: 504, code: 'GEMINI_TIMEOUT' });
 
   await assert.rejects(requestGeminiJson({
     prompt: 'test', schema, apiKey: 'test-key', model: 'gemini-3.8-flash',
@@ -247,10 +290,24 @@ test('insight controller uses the authenticated shop id and request filters', as
 });
 
 test('quick insight generation is rate limited per authenticated shop', async (context) => {
+  const counters = new Map();
+  const counterStore = {
+    async increment(scope, windowMs, now) {
+      const key = `${scope}:${Math.floor(now / windowMs)}`;
+      const count = (counters.get(key) || 0) + 1;
+      counters.set(key, count);
+      return { count, retryAfterSeconds: 1 };
+    },
+  };
+  const limiter = createGeminiRequestLimiter({
+    endpoint: 'insights', counterStore,
+    leaseStore: { acquire: async (_max, owner) => ({ id: owner, owner }), release: async () => {} },
+    appLimitMax: 100, userLimitMax: 100, shopLimitMax: 8, now: () => 1000,
+  });
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => { req.user = { shopId: 'insight-rate-limit-test-shop' }; next(); });
-  app.post('/insights', analyticsInsightsLimiter, (_req, res) => res.json({ success: true }));
+  app.use((req, _res, next) => { req.user = { id: 'insight-rate-limit-test-user', shopId: 'insight-rate-limit-test-shop' }; next(); });
+  app.post('/insights', limiter, (_req, res) => res.json({ success: true }));
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   context.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));

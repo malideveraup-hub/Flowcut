@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createOwnShopAnalyticsHandler } from '../src/controllers/analyticsController.js';
+import { errorHandler } from '../src/middleware/errorHandler.js';
 import {
   buildShopAnalyticsData,
   createShopScopedQueueQuery,
@@ -97,9 +98,9 @@ test('peak-hour comparisons require a useful sample and compare observed hours o
 
 test('all queue history queries bind the authenticated shop id, ignoring client shop ids', () => {
   const query = createShopScopedQueueQuery(shopId, filters({ serviceId, barberId }));
-  assert.equal(query.shopId, shopId);
-  assert.equal(query.serviceId, serviceId);
-  assert.equal(query.barberId, barberId);
+  assert.equal(String(query.shopId), shopId);
+  assert.equal(String(query.serviceId), serviceId);
+  assert.equal(String(query.barberId), barberId);
   assert.equal(query.$or[0].createdAt.$gte.toISOString(), '2026-10-01T00:00:00.000Z');
   assert.deepEqual(query.$or[1].status.$in, ['COMPLETED', 'CANCELLED']);
 });
@@ -118,6 +119,38 @@ test('analytics controller uses the authenticated shop id rather than a client s
   );
   assert.equal(receivedShopId, shopId);
   assert.deepEqual(responseBody, { success: true, data: { ok: true } });
+});
+
+test('analytics controller forwards genuine database failures for a 500 response instead of returning empty data', async () => {
+  const databaseError = Object.assign(new Error('MongoDB server selection timed out'), { name: 'MongoServerSelectionError' });
+  const handler = createOwnShopAnalyticsHandler(async () => { throw databaseError; });
+  let responseBody;
+  let statusCode;
+  let nextError;
+  const response = {
+    status(code) { statusCode = code; return this; },
+    json(body) { responseBody = body; return this; },
+  };
+  await handler(
+    { user: { shopId }, query: {} },
+    response,
+    (error) => { nextError = error; },
+  );
+
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    errorHandler(nextError, {}, response, () => {});
+  } finally {
+    console.error = originalConsoleError;
+  }
+  assert.equal(statusCode, 500);
+  assert.deepEqual(responseBody, {
+    success: false,
+    message: 'Something went wrong on our end. Please try again.',
+    errors: [],
+  });
+  assert.doesNotMatch(JSON.stringify(responseBody), /MongoDB|selection timed out/);
 });
 
 test('duration fallback rejects malformed and reversed intervals', () => {
@@ -161,10 +194,13 @@ test('computes visit, wait, duration, distribution, service, barber, and estimat
   assert.equal(data.summary.estimateWithinRangePercent, 100);
   assert.equal(data.summary.averageWaitMinutes, 12.5);
   assert.equal(data.summary.averageMinutes, 27.5);
+  assert.deepEqual(data.summary.durationFrequency, [{ minutes: 25, count: 1 }, { minutes: 30, count: 1 }]);
+  assert.deepEqual(data.summary.mostCommonDurations, [{ minutes: 25, count: 1 }, { minutes: 30, count: 1 }]);
   assert.equal(data.daily.length, 3);
   assert.equal(data.hourly[9].joined, 2);
   assert.equal(data.serviceStats[0].completedCount, 3);
   assert.equal(data.serviceStats[0].requestedCount, 3);
+  assert.deepEqual(data.serviceStats[0].mostCommonDurations, [{ minutes: 25, count: 1 }, { minutes: 30, count: 1 }]);
   assert.equal(data.barberStats[0].completedCount, 2);
   assert.equal(data.summary.currentAvailableBarbers, 1);
   assert.equal(data.queueSizeAnalysis, null);

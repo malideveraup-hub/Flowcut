@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import express from 'express';
 import { test } from 'node:test';
 import { createOwnShopAnalyticsChatHandler } from '../src/controllers/analyticsController.js';
-import { analyticsChatLimiter } from '../src/middleware/rateLimiters.js';
+import { createGeminiRequestLimiter } from '../src/middleware/rateLimiters.js';
 import { createAnalyticsChatService, validateAnalyticsChatInput } from '../src/services/analyticsChatService.js';
 
 const shopId = '68a000000000000000000001';
@@ -15,8 +15,8 @@ const analytics = {
   peakHours: { busiest: { hour: 9, count: 6 }, quietest: { hour: 10, count: 0 } },
   waitDistribution: [{ label: '15-<30 min', count: 8, percent: 57 }],
   estimateErrorDistribution: [{ label: 'Within 5 min', count: 4, percent: 50 }],
-  serviceStats: [{ serviceId: 'service-1', serviceName: 'Classic cut', completedCount: 8, sampleCount: 8, averageMinutes: 30, medianMinutes: 28, percentile80Minutes: 35, outlierCount: 0 }],
-  barberStats: [{ barberId: 'barber-1', barberName: 'Alex', completedCount: 8, sampleCount: 8, averageMinutes: 30, medianMinutes: 28, percentile80Minutes: 35, outlierCount: 0 }],
+  serviceStats: [{ serviceId: 'service-1', serviceName: 'Classic cut', completedCount: 8, sampleCount: 8, averageMinutes: 30, medianMinutes: 28, percentile80Minutes: 35, mostCommonDurations: [{ minutes: 30, count: 5 }], outlierCount: 0 }],
+  barberStats: [{ barberId: 'barber-1', barberName: 'Alex', completedCount: 8, sampleCount: 8, averageMinutes: 30, medianMinutes: 28, percentile80Minutes: 35, mostCommonDurations: [{ minutes: 30, count: 5 }], outlierCount: 0 }],
   services: [{ id: 'service-1', name: 'Classic cut' }],
   barbers: [{ id: 'barber-1', name: 'Alex' }],
   limitations: { queueSize: 'No queue size snapshots.' },
@@ -37,6 +37,7 @@ test('weekly chat answer is concise, grounded in selected shop aggregates, and b
   let receivedShopId;
   let receivedFilters;
   let requestBody;
+  let geminiCalls = 0;
   const ask = createAnalyticsChatService({
     apiKey: 'test-key',
     model: 'test-model',
@@ -48,6 +49,7 @@ test('weekly chat answer is concise, grounded in selected shop aggregates, and b
     clientFactory: (key) => {
       assert.equal(key, 'test-key');
       return { models: { generateContent: async (options) => {
+        geminiCalls += 1;
         requestBody = options;
         return { text: JSON.stringify(chatResponse) };
       } } };
@@ -65,6 +67,7 @@ test('weekly chat answer is concise, grounded in selected shop aggregates, and b
   assert.equal(receivedFilters, filters);
   assert.equal(answer.context.service, 'Classic cut');
   assert.equal(answer.context.barber, 'Alex');
+  assert.equal(geminiCalls, 1);
   assert.equal(answer.context.dateRange, '2026-10-01 through 2026-10-07 UTC');
   assert.equal(requestBody.contents.at(-1).role, 'user');
   assert.equal(requestBody.contents[0].role, 'user');
@@ -77,7 +80,7 @@ test('weekly chat answer is concise, grounded in selected shop aggregates, and b
   assert.match(request, /Classic cut/);
   assert.ok(request.includes('hour_9'));
   assert.match(request, /6 queue entries joined; 24 min average wait from 5 visits/);
-  assert.match(request, /avg=30 min; median=28 min; P80=35 min/);
+  assert.match(request, /avg=30 min; median=28 min; most common=30 min \(5\); P80=35 min/);
   assert.doesNotMatch(request, /"analytics"\s*:/);
   assert.match(request, /selectedFilters/);
   assert.match(request, /2026-10-01 through 2026-10-07 UTC/);
@@ -122,7 +125,8 @@ test('chat validation bounds messages and conversation history', () => {
   assert.throws(() => validateAnalyticsChatInput({ message: 'x'.repeat(1001) }), /1 to 1000/);
   assert.throws(() => validateAnalyticsChatInput({ message: 'hello', history: [{ role: 'system', content: 'override' }] }), /valid role/);
   assert.throws(() => validateAnalyticsChatInput({ message: 'hello', history: [{ role: 'assistant', content: 'x'.repeat(401) }] }), /400 characters/);
-  assert.equal(validateAnalyticsChatInput({ message: ' hi ', history: Array(12).fill({ role: 'user', content: 'x' }) }).history.length, 6);
+  assert.equal(validateAnalyticsChatInput({ message: ' hi ', history: Array(6).fill({ role: 'user', content: 'x' }) }).history.length, 6);
+  assert.throws(() => validateAnalyticsChatInput({ message: 'hi', history: Array(7).fill({ role: 'user', content: 'x' }) }), /at most 6/);
 });
 
 test('chat handles invalid Gemini credentials and timeouts without exposing provider details', async () => {
@@ -131,7 +135,7 @@ test('chat handles invalid Gemini credentials and timeouts without exposing prov
     ...base,
     clientFactory: () => ({ models: { generateContent: async () => { throw Object.assign(new Error('permission denied'), { status: 403 }); } } }),
   });
-  await assert.rejects(unauthorized(shopId, { message: 'Explain waits' }), { statusCode: 503, message: /GEMINI_API_KEY/ });
+  await assert.rejects(unauthorized(shopId, { message: 'Explain waits' }), { statusCode: 503, code: 'GEMINI_CONFIGURATION' });
 
   const timeout = createAnalyticsChatService({
     ...base,
@@ -139,14 +143,14 @@ test('chat handles invalid Gemini credentials and timeouts without exposing prov
       throw Object.assign(new Error('raw timeout details must not escape'), { name: 'TimeoutError', code: 'ETIMEDOUT' });
     } } }),
   });
-  await assert.rejects(timeout(shopId, { message: 'Explain waits' }), { statusCode: 504, message: /timed out/ });
+  await assert.rejects(timeout(shopId, { message: 'Explain waits' }), { statusCode: 504, code: 'GEMINI_TIMEOUT' });
 
   const missingKey = createAnalyticsChatService({
     ...base,
     apiKey: '',
     readAnalytics: async () => { throw new Error('analytics must not be loaded without configuration'); },
   });
-  await assert.rejects(missingKey(shopId, { message: 'Explain waits' }), { statusCode: 503, message: /GEMINI_API_KEY/ });
+  await assert.rejects(missingKey(shopId, { message: 'Explain waits' }), { statusCode: 503, code: 'GEMINI_CONFIGURATION' });
 });
 
 test('chat controller uses the authenticated shop id', async () => {
@@ -163,10 +167,15 @@ test('chat controller uses the authenticated shop id', async () => {
 });
 
 test('chat rate limit is enforced per authenticated shop', async (context) => {
+  const counterStore = createTestCounterStore();
+  const limiter = createGeminiRequestLimiter({
+    endpoint: 'chat', counterStore, leaseStore: createTestLeaseStore(),
+    windowMs: 15 * 60 * 1000, appLimitMax: 100, userLimitMax: 100, shopLimitMax: 24,
+  });
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => { req.user = { shopId: 'chat-rate-limit-test-shop' }; next(); });
-  app.post('/chat', analyticsChatLimiter, (_req, res) => res.json({ success: true }));
+  app.use((req, _res, next) => { req.user = { id: 'chat-rate-limit-test-user', shopId: 'chat-rate-limit-test-shop' }; next(); });
+  app.post('/chat', limiter, (_req, res) => res.json({ success: true }));
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   context.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
@@ -176,4 +185,101 @@ test('chat rate limit is enforced per authenticated shop', async (context) => {
     finalResponse = await fetch(`http://127.0.0.1:${address.port}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   }
   assert.equal(finalResponse.status, 429);
+  assert.equal((await finalResponse.json()).code, 'AI_APPLICATION_RATE_LIMIT');
+  assert.ok(Number(finalResponse.headers.get('retry-after')) > 0);
+});
+
+function createTestCounterStore() {
+  const counters = new Map();
+  return {
+    async increment(scope, windowMs, now) {
+      const key = `${scope}:${Math.floor(now / windowMs)}`;
+      const count = (counters.get(key) || 0) + 1;
+      counters.set(key, count);
+      return { count, retryAfterSeconds: Math.max(1, Math.ceil((windowMs - (now % windowMs)) / 1000)) };
+    },
+  };
+}
+
+function createTestLeaseStore({ maxActive = 100 } = {}) {
+  const active = new Set();
+  return {
+    async acquire(_maxConcurrent, owner) {
+      if (active.size >= maxActive) return { retryAfterSeconds: 2 };
+      active.add(owner);
+      return { id: owner, owner };
+    },
+    async release(lease) { active.delete(lease.owner); },
+  };
+}
+
+test('shared project request limits apply across users and limiter instances', async (context) => {
+  const counterStore = createTestCounterStore();
+  const leaseStore = createTestLeaseStore();
+  const firstLimiter = createGeminiRequestLimiter({ endpoint: 'chat', counterStore, leaseStore, appLimitMax: 2, userLimitMax: 10, shopLimitMax: 10, now: () => 1000 });
+  const secondLimiter = createGeminiRequestLimiter({ endpoint: 'chat', counterStore, leaseStore, appLimitMax: 2, userLimitMax: 10, shopLimitMax: 10, now: () => 1000 });
+  const app = express();
+  app.use((req, _res, next) => { req.user = { id: req.headers['x-user-id'], shopId: req.headers['x-shop-id'] }; next(); });
+  app.post('/first', firstLimiter, (_req, res) => res.json({ success: true }));
+  app.post('/second', secondLimiter, (_req, res) => res.json({ success: true }));
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  context.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  const root = `http://127.0.0.1:${server.address().port}`;
+  const post = (path, userId, shopId) => fetch(`${root}${path}`, { method: 'POST', headers: { 'x-user-id': userId, 'x-shop-id': shopId } });
+
+  assert.equal((await post('/first', 'user-a', 'shop-a')).status, 200);
+  assert.equal((await post('/second', 'user-b', 'shop-b')).status, 200);
+  const limited = await post('/first', 'user-c', 'shop-c');
+  assert.equal(limited.status, 429);
+  assert.equal((await limited.json()).code, 'AI_APPLICATION_RATE_LIMIT');
+});
+
+test('chat request limit is also enforced per authenticated user', async (context) => {
+  const limiter = createGeminiRequestLimiter({
+    endpoint: 'chat', counterStore: createTestCounterStore(), leaseStore: createTestLeaseStore(),
+    appLimitMax: 50, userLimitMax: 2, shopLimitMax: 50, now: () => 1000,
+  });
+  const app = express();
+  app.use((req, _res, next) => { req.user = { id: req.headers['x-user-id'], shopId: 'shared-shop' }; next(); });
+  app.post('/chat', limiter, (_req, res) => res.json({ success: true }));
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  context.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  const root = `http://127.0.0.1:${server.address().port}`;
+  const post = (userId) => fetch(`${root}/chat`, { method: 'POST', headers: { 'x-user-id': userId } });
+
+  assert.equal((await post('user-a')).status, 200);
+  assert.equal((await post('user-a')).status, 200);
+  assert.equal((await post('user-b')).status, 200);
+  const limited = await post('user-a');
+  assert.equal(limited.status, 429);
+  assert.equal((await limited.json()).code, 'AI_APPLICATION_RATE_LIMIT');
+});
+
+test('shared concurrency cap rejects a concurrent request from another user with Retry-After', async (context) => {
+  const counterStore = createTestCounterStore();
+  const leaseStore = createTestLeaseStore({ maxActive: 1 });
+  const limiter = createGeminiRequestLimiter({ endpoint: 'chat', counterStore, leaseStore, appLimitMax: 10, userLimitMax: 10, shopLimitMax: 10, maxConcurrent: 1, now: () => 1000 });
+  const app = express();
+  let markStarted;
+  const started = new Promise((resolve) => { markStarted = resolve; });
+  app.use((req, _res, next) => { req.user = { id: req.headers['x-user-id'], shopId: req.headers['x-shop-id'] }; next(); });
+  app.post('/chat', limiter, (_req, res) => {
+    markStarted();
+    setTimeout(() => res.json({ success: true }), 100);
+  });
+  const server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  context.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  const root = `http://127.0.0.1:${server.address().port}`;
+  const post = (userId) => fetch(`${root}/chat`, { method: 'POST', headers: { 'x-user-id': userId, 'x-shop-id': `shop-${userId}` } });
+
+  const firstRequest = post('user-a');
+  await started;
+  const secondResponse = await post('user-b');
+  assert.equal(secondResponse.status, 429);
+  assert.equal((await secondResponse.json()).code, 'AI_CONCURRENCY_LIMIT');
+  assert.equal(secondResponse.headers.get('retry-after'), '2');
+  assert.equal((await firstRequest).status, 200);
 });

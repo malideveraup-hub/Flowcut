@@ -1,6 +1,7 @@
 import { Barber, QueueEntry, Service, ServiceLog, WaitingEstimate } from '../models/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { isValidObjectId } from '../utils/mongoId.js';
+import { Types } from 'mongoose';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_RANGE_DAYS = 90;
@@ -56,10 +57,11 @@ export function validateAnalyticsFilters(query = {}, now = new Date()) {
 }
 
 function baseQueryWithoutDates(shopId, filters) {
+  const toObjectId = (value) => new Types.ObjectId(String(value));
   return {
-    shopId,
-    ...(filters.serviceId ? { serviceId: filters.serviceId } : {}),
-    ...(filters.barberId ? { barberId: filters.barberId } : {}),
+    shopId: toObjectId(shopId),
+    ...(filters.serviceId ? { serviceId: toObjectId(filters.serviceId) } : {}),
+    ...(filters.barberId ? { barberId: toObjectId(filters.barberId) } : {}),
   };
 }
 
@@ -164,12 +166,23 @@ function initialApplicableEstimate(estimates, joinedAt, startedAt) {
 
 function durationSummary(values) {
   const cleaned = values.filter(Number.isFinite);
+  const frequencyCounts = new Map();
+  cleaned.forEach((value) => {
+    const minutes = Math.round(value);
+    frequencyCounts.set(minutes, (frequencyCounts.get(minutes) || 0) + 1);
+  });
+  const durationFrequency = [...frequencyCounts.entries()]
+    .map(([minutes, count]) => ({ minutes, count }))
+    .sort((left, right) => left.minutes - right.minutes);
+  const highestFrequency = durationFrequency.reduce((highest, bucket) => Math.max(highest, bucket.count), 0);
   return {
     sampleCount: cleaned.length,
     cleanedSampleCount: cleaned.length,
     averageMinutes: cleaned.length ? mean(cleaned) : null,
     medianMinutes: median(cleaned),
     percentile80Minutes: percentile80(cleaned),
+    durationFrequency,
+    mostCommonDurations: durationFrequency.filter((bucket) => bucket.count === highestFrequency),
     outlierCount: values.length - cleaned.length,
   };
 }

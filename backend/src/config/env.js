@@ -9,6 +9,11 @@ dotenv.config();
 const REQUIRED_VARS = ['MONGODB_URI', 'JWT_SECRET'];
 const DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES = 30;
 const DEFAULT_AUTH_SESSION_MAX_LIFETIME_DAYS = 7;
+const DEFAULT_GEMINI_LIMIT_WINDOW_MINUTES = 15;
+const DEFAULT_GEMINI_USER_LIMIT_MAX = 24;
+const DEFAULT_GEMINI_APP_LIMIT_MAX = 32;
+const DEFAULT_GEMINI_MAX_CONCURRENT_REQUESTS = 2;
+const DEFAULT_GEMINI_CONCURRENCY_LEASE_SECONDS = 90;
 
 function positiveIntegerEnv(name, fallback, maximum) {
   const raw = process.env[name];
@@ -97,6 +102,14 @@ function loadEnv() {
     DEFAULT_AUTH_SESSION_MAX_LIFETIME_DAYS,
     365
   );
+  const geminiLimitWindowMinutes = positiveIntegerEnv('GEMINI_LIMIT_WINDOW_MINUTES', DEFAULT_GEMINI_LIMIT_WINDOW_MINUTES, 24 * 60);
+  const geminiUserLimitMax = positiveIntegerEnv('GEMINI_USER_LIMIT_MAX', DEFAULT_GEMINI_USER_LIMIT_MAX, 10000);
+  const geminiAppLimitMax = positiveIntegerEnv('GEMINI_APP_LIMIT_MAX', DEFAULT_GEMINI_APP_LIMIT_MAX, 10000);
+  const geminiMaxConcurrentRequests = positiveIntegerEnv('GEMINI_MAX_CONCURRENT_REQUESTS', DEFAULT_GEMINI_MAX_CONCURRENT_REQUESTS, 100);
+  const geminiConcurrencyLeaseSeconds = positiveIntegerEnv('GEMINI_CONCURRENCY_LEASE_SECONDS', DEFAULT_GEMINI_CONCURRENCY_LEASE_SECONDS, 300);
+  if (geminiConcurrencyLeaseSeconds < 60) {
+    throw new Error('GEMINI_CONCURRENCY_LEASE_SECONDS must be between 60 and 300.');
+  }
 
   return {
     nodeEnv,
@@ -106,6 +119,11 @@ function loadEnv() {
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
     authSessionIdleTimeoutMs: authSessionIdleTimeoutMinutes * 60 * 1000,
     authSessionMaxLifetimeMs: authSessionMaxLifetimeDays * 24 * 60 * 60 * 1000,
+    geminiLimitWindowMs: geminiLimitWindowMinutes * 60 * 1000,
+    geminiUserLimitMax,
+    geminiAppLimitMax,
+    geminiMaxConcurrentRequests,
+    geminiConcurrencyLeaseMs: geminiConcurrencyLeaseSeconds * 1000,
     corsOrigins: getCorsOrigins(),
     smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
     smtpPort: Number(process.env.SMTP_PORT) || 587,

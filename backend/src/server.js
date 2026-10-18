@@ -9,6 +9,8 @@ import {
   PushSubscription,
   QueueEntry,
   AuthSession,
+  GeminiRequestCounter,
+  GeminiRequestSlot,
   User,
 } from './models/index.js';
 import { startQueueNotificationMonitor } from './services/queueNotificationService.js';
@@ -22,6 +24,8 @@ export async function startServer({
     QueueEntry.syncIndexes(),
     MapImage.syncIndexes(),
     AuthSession.syncIndexes(),
+    GeminiRequestCounter.syncIndexes(),
+    GeminiRequestSlot.syncIndexes(),
   ]),
   startMonitor = startQueueNotificationMonitor,
   app = createApp(),
@@ -39,7 +43,7 @@ export async function startServer({
   await synchronizeIndexes();
 
   console.log(
-    '[db] User, notification, push subscription, queue, map image, and auth session indexes synchronized'
+    '[db] Application indexes synchronized'
   );
 
   startMonitor();

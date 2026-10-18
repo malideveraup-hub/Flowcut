@@ -57,6 +57,9 @@ function translateMongooseError(err) {
 // not remove any of these parameters even if unused.
 export function errorHandler(err, req, res, _next) {
   if (err instanceof AppError) {
+    if (Number.isFinite(err.retryAfterSeconds) && err.retryAfterSeconds > 0) {
+      res.set('Retry-After', String(Math.ceil(err.retryAfterSeconds)));
+    }
     return res.status(err.statusCode).json({
       success: false,
       message: err.message,

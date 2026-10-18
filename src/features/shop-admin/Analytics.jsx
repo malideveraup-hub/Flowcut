@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { askOwnShopAnalyticsAssistant, fetchOwnShop, fetchOwnShopAnalytics } from '../../api/shopAdminApi';
+import { acquireChatRequest, releaseChatRequest } from './analyticsChatGuard';
+import { formatChatErrorMessage } from './analyticsChatErrors';
 import DropdownSelect from '../../components/ui/DropdownSelect';
 import EmptyState from '../../components/ui/EmptyState';
 import MetricCard from '../../components/staff/MetricCard';
@@ -33,6 +35,12 @@ function initialDateRange() {
 
 function formatMinutes(value) {
   return Number.isFinite(value) ? `${Math.round(value)} min` : 'N/A';
+}
+
+function formatMostCommonDurations(durations = []) {
+  return durations.length
+    ? durations.map(({ minutes, count }) => `${minutes} min (${count})`).join(', ')
+    : 'N/A';
 }
 
 function formatPercent(value) {
@@ -199,32 +207,6 @@ function AnalyticsTable({ records, pagination, onPageChange }) {
   );
 }
 
-function formatChatErrorMessage(rawError) {
-  const msg = rawError?.message || String(rawError || '');
-  if (/timed? ?out|too long/i.test(msg)) {
-    return 'The AI assistant took too long to respond. Please try again.';
-  }
-  if (/rate limit|too many requests|busy right now/i.test(msg)) {
-    return 'The AI assistant is busy right now. Please wait a moment before trying again.';
-  }
-  if (/quota|resource_exhausted/i.test(msg)) {
-    return 'The AI assistant is busy right now. Please wait a moment before trying again.';
-  }
-  if (/network|fetch|connect|offline|reach/i.test(msg)) {
-    return 'Unable to connect to the AI assistant. Check your connection and try again.';
-  }
-  if (/GEMINI_API_KEY|unauthorized|permission|not configured|configuration|model/i.test(msg)) {
-    return 'The AI assistant is temporarily unavailable. Please contact your administrator if the problem continues.';
-  }
-  if (/unavailable|503|trouble/i.test(msg)) {
-    return "We're having trouble generating your answer right now. Please try again shortly.";
-  }
-  if (/1 to 1000|400 characters|valid role/i.test(msg)) {
-    return msg;
-  }
-  return msg || "We're having trouble generating your answer right now. Please try again shortly.";
-}
-
 export default function Analytics() {
   const initial = initialDateRange();
   const [datePreset, setDatePreset] = useState('week');
@@ -287,8 +269,7 @@ export default function Analytics() {
 
   async function sendChat(rawMessage = chatInput, retry = false) {
     const message = rawMessage.trim();
-    if (!message || chatLoading || chatRequestInFlightRef.current || message.length > 1000) return;
-    chatRequestInFlightRef.current = true;
+    if (!message || chatLoading || message.length > 1000 || !acquireChatRequest(chatRequestInFlightRef)) return;
     const previousMessages = retry ? chatMessages.slice(0, -1) : chatMessages;
     setChatError('');
     setLastChatMessage(message);
@@ -314,7 +295,7 @@ export default function Analytics() {
     } catch (err) {
       setChatError(formatChatErrorMessage(err));
     } finally {
-      chatRequestInFlightRef.current = false;
+      releaseChatRequest(chatRequestInFlightRef);
       setChatLoading(false);
     }
   }
@@ -498,10 +479,10 @@ export default function Analytics() {
           <PopularityChart services={analytics.serviceStats} total={analytics.serviceStats.reduce((sum, service) => sum + (service.requestedCount || 0), 0)} onSelect={(serviceId) => { setDraft((current) => ({ ...current, serviceId })); setFilters((current) => ({ ...current, serviceId, page: 1 })); }} />
           <div className={styles.tableScroller}>
             <table className={styles.table}>
-              <thead><tr><th>Service</th><th>Completed</th><th>Median</th><th>Avg duration</th><th>80% complete by</th><th>Excluded durations</th></tr></thead>
+              <thead><tr><th>Service</th><th>Completed</th><th>Median</th><th>Avg duration</th><th>Most common duration(s)</th><th>80% complete by</th><th>Excluded durations</th></tr></thead>
               <tbody>
-                {analytics.serviceStats.map((service) => <tr key={service.serviceId}><th scope="row">{service.serviceName}</th><td>{service.completedCount}</td><td>{formatMinutes(service.medianMinutes)}</td><td>{formatMinutes(service.averageMinutes)}</td><td>{formatMinutes(service.percentile80Minutes)}</td><td>{service.outlierCount}</td></tr>)}
-                {!analytics.serviceStats.length && <tr><td className={styles.emptyCell} colSpan="6">No recorded service sessions for these filters.</td></tr>}
+                {analytics.serviceStats.map((service) => <tr key={service.serviceId}><th scope="row">{service.serviceName}</th><td>{service.completedCount}</td><td>{formatMinutes(service.medianMinutes)}</td><td>{formatMinutes(service.averageMinutes)}</td><td>{formatMostCommonDurations(service.mostCommonDurations)}</td><td>{formatMinutes(service.percentile80Minutes)}</td><td>{service.outlierCount}</td></tr>)}
+                {!analytics.serviceStats.length && <tr><td className={styles.emptyCell} colSpan="7">No recorded service sessions for these filters.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -524,7 +505,7 @@ export default function Analytics() {
       <section className={styles.panel}>
         <div className={styles.panelHeader}><div><h2>Recorded service sessions</h2><p>Underlying rows used for wait and duration analysis. No customer identity data is displayed.</p></div></div>
         <AnalyticsTable records={analytics.records} pagination={analytics.pagination} onPageChange={(page) => setFilters((current) => ({ ...current, page }))} />
-        <p className={styles.note}>Times and date filters use UTC. Wait is service start minus queue-entry creation. Service duration prefers the saved duration, then valid start-to-finish timestamps; invalid or implausible durations are excluded.</p>
+        <p className={styles.note}>Times and date filters use UTC. Wait is service start minus queue-entry creation. Service duration prefers the saved duration, then valid start-to-finish timestamps; invalid or implausible durations are excluded. Common durations use whole-minute buckets and show every tied mode.</p>
       </section>
     </div>
   );
