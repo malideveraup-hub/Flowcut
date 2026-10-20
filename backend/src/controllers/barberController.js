@@ -1,4 +1,5 @@
 import * as barberService from '../services/barberManagementService.js';
+import * as serviceManagementService from '../services/serviceManagementService.js';
 import * as queueService from '../services/queueService.js';
 
 // ---- Shop Admin managing barbers ----
@@ -33,6 +34,30 @@ export async function updateBarberStatus(req, res, next) {
 }
 
 // ---- Barber's own dashboard/actions (req.barber set by attachBarberProfile) ----
+
+export async function listMyShopServices(req, res, next) {
+  try {
+    const services = await serviceManagementService.getShopServices(req.barber.shopId);
+    res.json({ success: true, data: { services } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createMyShopService(req, res, next) {
+  try {
+    const { name, description, estimatedDuration, price } = req.body || {};
+    const service = await serviceManagementService.createService(req.barber.shopId, {
+      name,
+      description,
+      estimatedDuration,
+      price,
+    });
+    res.status(201).json({ success: true, data: { service } });
+  } catch (err) {
+    next(err);
+  }
+}
 
 export async function getMyDashboard(req, res, next) {
   try {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { deleteAccountRequest, updateProfileRequest } from '../../api/authApi';
@@ -191,7 +192,9 @@ function ProfileSettings({ user, onSave, onLogout, onDeleteAccount, shopApplicat
       </div>
 
       {confirm && (
-        <div className={styles.modal} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleting) setConfirm(null); }}>
+        createPortal(<>
+          <div className={styles.backdrop} role="presentation" onMouseDown={() => { if (!deleting) setConfirm(null); }} />
+          <div className={styles.modal}>
           <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="confirm-title">
             <h2 id="confirm-title">{confirm === 'logout' ? 'Log out?' : 'Delete your account?'}</h2>
             <p>{confirm === 'logout' ? 'Sign out of FlowCut on this device.' : 'This permanently removes your account and cannot be undone. Type DELETE to confirm.'}</p>
@@ -203,7 +206,8 @@ function ProfileSettings({ user, onSave, onLogout, onDeleteAccount, shopApplicat
               </button>
             </div>
           </section>
-        </div>
+          </div>
+        </>, document.body)
       )}
     </>
   );

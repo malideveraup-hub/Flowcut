@@ -11,6 +11,7 @@ import {
   fetchShopQueue,
 } from '../../api/shopAdminApi';
 import Button from '../../components/ui/Button';
+import NativeSelect from '../../components/ui/NativeSelect';
 import EmptyState from '../../components/ui/EmptyState';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
@@ -178,21 +179,21 @@ export default function Dashboard() {
       </header>
 
       <section className={styles.statsGrid} aria-label="Today's statistics">
-        <article className={styles.statCard}>
+        <article className={styles.statCard} data-scroll-reveal>
           <div className={styles.statTop}><span>Today's queue</span><span className={`${styles.statIcon} ${styles.iconPurple}`}><Icon name="queue" /></span></div>
           <strong>{activeQueue.length}</strong><small className={styles.captionPurple}>{waitingEntries.length} currently waiting</small>
         </article>
-        <article className={styles.statCard}>
+        <article className={styles.statCard} data-scroll-reveal>
           <div className={styles.statTop}><span>Active barbers</span><span className={`${styles.statIcon} ${styles.iconGreen}`}><Icon name="barber" /></span></div>
           <strong>{onDutyBarbers.length} / {activeBarbers.length}</strong>
           <small className={styles.captionGreen}>{activeBarbers.length ? Math.round((onDutyBarbers.length / activeBarbers.length) * 100) : 0}% capacity</small>
         </article>
-        <article className={styles.statCard}>
+        <article className={styles.statCard} data-scroll-reveal>
           <div className={styles.statTop}><span>Average wait</span><span className={`${styles.statIcon} ${styles.iconBlue}`}><Icon name="wait" /></span></div>
           <strong>{currentAverageWait === null ? '—' : `${currentAverageWait} min`}</strong>
           <small className={styles.captionGreen}>{waitEstimate ? `${waitEstimate.min}–${waitEstimate.max} min live estimate` : 'No customers waiting'}</small>
         </article>
-        <article className={styles.statCard}>
+        <article className={styles.statCard} data-scroll-reveal>
           <div className={styles.statTop}><span>Completed services</span><span className={`${styles.statIcon} ${styles.iconAmber}`}><Icon name="completed" /></span></div>
           <strong>{summary?.completedServices ?? '—'}</strong>
           <small className={styles.captionPurple}>{summary ? `${formatCurrency(summary.listedValue)} at listed prices` : 'Today'}</small>
@@ -248,13 +249,13 @@ export default function Dashboard() {
           </section>
         </div>
 
-        <section className={`${styles.panel} ${styles.barbersPanel}`}>
+        <section className={`${styles.panel} ${styles.barbersPanel}`} data-scroll-reveal>
           <div className={styles.panelHeader}>
             <div><h2>Barbers on duty</h2><p>Status across today's shift</p></div>
             <label className={styles.sortControl}>Sort by
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+              <NativeSelect value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
                 <option value="availability">Status</option><option value="name">Name</option>
-              </select>
+              </NativeSelect>
             </label>
           </div>
           {orderedBarbers.length ? (
@@ -276,9 +277,9 @@ export default function Dashboard() {
         <form className={styles.walkInForm} onSubmit={handleAddWalkIn}>
           <Input label="Customer name" value={walkInName} onChange={(event) => setWalkInName(event.target.value)} placeholder="Full name" />
           <label className={styles.formLabel} htmlFor="dashboard-service">Service</label>
-          <select id="dashboard-service" className={styles.serviceSelect} value={serviceId} onChange={(event) => setServiceId(event.target.value)}>
+          <NativeSelect id="dashboard-service" className={styles.serviceSelect} value={serviceId} onChange={(event) => setServiceId(event.target.value)}>
             {availableServices.map((service) => <option key={service.id || service._id} value={service.id || service._id}>{service.name} · {service.estimatedDuration} min</option>)}
-          </select>
+          </NativeSelect>
           {!availableServices.length && <p className={styles.formHint}>Add an active service before creating a walk-in.</p>}
           <Button type="submit" fullWidth disabled={submitting || !availableServices.length || !walkInName.trim()}>{submitting ? 'Adding…' : 'Add to queue'}</Button>
         </form>

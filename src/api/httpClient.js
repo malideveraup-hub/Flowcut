@@ -39,6 +39,18 @@ async function readError(response) {
 
 export async function apiRequest(path, { method = 'GET', body, normalizeUnauthorized = true } = {}) {
   ensureApiConfigured();
+  const isBarberStartRequest = method === 'PATCH' && /^\/api\/barber\/queue\/[^/]+\/start$/.test(path);
+  const startRequestId = isBarberStartRequest ? body?.requestId || null : null;
+  const apiOrigin = isBarberStartRequest ? new URL(API_BASE).origin : null;
+  if (isBarberStartRequest && import.meta.env.DEV) {
+    console.info('[api:queue:start]', JSON.stringify({
+      phase: 'request_sent',
+      requestId: startRequestId,
+      method,
+      endpoint: path,
+      apiOrigin,
+    }));
+  }
   let res;
   try {
     res = await fetch(`${API_BASE}${path}`, {
@@ -50,6 +62,17 @@ export async function apiRequest(path, { method = 'GET', body, normalizeUnauthor
     });
   } catch {
     logNetworkFailure(method, path);
+    if (isBarberStartRequest && import.meta.env.DEV) {
+      console.warn('[api:queue:start]', JSON.stringify({
+        phase: 'request_failed',
+        requestId: startRequestId,
+        method,
+        endpoint: path,
+        apiOrigin,
+        httpStatus: 0,
+        errorCode: 'NETWORK_ERROR',
+      }));
+    }
     const err = new Error("Couldn't reach the server. Check your connection and try again.");
     err.status = 0;
     throw err;
@@ -62,13 +85,23 @@ export async function apiRequest(path, { method = 'GET', body, normalizeUnauthor
     // Non-JSON response — fall through to the generic message below.
   }
 
+  if (isBarberStartRequest && import.meta.env.DEV) {
+    console.info('[api:queue:start]', JSON.stringify({
+      phase: 'response_received',
+      requestId: startRequestId,
+      method,
+      endpoint: path,
+      apiOrigin,
+      httpStatus: res.status,
+      errorCode: json?.code || json?.errorCode || (res.ok ? null : `HTTP_${res.status}`),
+    }));
+  }
+
   if (!res.ok || !json || json.success === false) {
     const err = new Error(res.status === 401 && !normalizeUnauthorized
       ? json?.message || `Request failed (${res.status}).`
       : getErrorMessage(res, json));
     err.status = res.status;
-    const retryAfter = Number(res.headers.get('retry-after'));
-    if (Number.isFinite(retryAfter) && retryAfter > 0) err.retryAfterSeconds = retryAfter;
     const rawErrors = json?.errors;
     err.fieldErrors = rawErrors && typeof rawErrors === 'object' && Object.keys(rawErrors).length > 0 ? rawErrors : null;
     throw err;

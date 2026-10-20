@@ -1,3 +1,4 @@
+import NativeSelect from '../../components/ui/NativeSelect';
 import { useEffect, useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { fetchAllShops, fetchAllUsers, generateShopQueueQr, regenerateShopQueueQr, setShopQueueQrStatus } from '../../api/adminApi';
@@ -289,17 +290,17 @@ export default function SuperAdminQRCodeManagement() {
               <input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Search shop name" />
             </label>
             <label className={styles.srOnly} htmlFor="qr-location">Location</label>
-            <select id="qr-location" value={location} onChange={(event) => { setLocation(event.target.value); setPage(1); }}>
+            <NativeSelect id="qr-location" value={location} onChange={(event) => { setLocation(event.target.value); setPage(1); }}>
               <option value="all">All locations</option>
               {locations.map((item) => <option value={item} key={item}>{item}</option>)}
-            </select>
+            </NativeSelect>
             <label className={styles.srOnly} htmlFor="qr-status">QR status</label>
-            <select id="qr-status" value={qrFilter} onChange={(event) => { setQrFilter(event.target.value); setPage(1); }}>
+            <NativeSelect id="qr-status" value={qrFilter} onChange={(event) => { setQrFilter(event.target.value); setPage(1); }}>
               <option value="all">All QR statuses</option>
               <option value="none">QR Not Generated</option>
               <option value="active">QR Active</option>
               <option value="disabled">QR Disabled</option>
-            </select>
+            </NativeSelect>
           </div>
         </div>
 
@@ -360,9 +361,9 @@ export default function SuperAdminQRCodeManagement() {
 
             {modal.type === 'generate' && currentGenerationShop && <>
               <div className={styles.dh}><h2 id="modal-title">Generate Queue QR Code</h2><button className={styles.xbtn} type="button" aria-label="Close" onClick={() => setModal(null)}>×</button></div>
-              <div className={styles.field}><label htmlFor="generate-shop">Approved shop</label><select id="generate-shop" value={generateShopId} onChange={(event) => setGenerateShopId(event.target.value)}>
+              <div className={styles.field}><label htmlFor="generate-shop">Approved shop</label><NativeSelect id="generate-shop" value={generateShopId} onChange={(event) => setGenerateShopId(event.target.value)}>
                 {eligibleShops.map((shop) => <option value={shop._id} key={shop._id}>{shop.name}</option>)}
-              </select></div>
+              </NativeSelect></div>
               <div className={styles.kv}>
                 <div><span>Shop</span><b>{currentGenerationShop.name}</b></div>
                 <div><span>Location</span><b>{currentGenerationShop.address}</b></div>

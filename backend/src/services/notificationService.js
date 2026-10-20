@@ -12,7 +12,10 @@ export async function createNotificationOnce(fields) {
 
     if (fields.type === 'NEAR_TURN' || fields.type === 'ARRIVE_SOON') {
       void sendQueuePushNotification(result.upsertedId, fields).catch((error) => {
-        console.error('[web-push] Could not send queue reminder:', error.message);
+        console.error('[web-push] Could not send queue reminder.', {
+          status: Number.isInteger(error?.statusCode) ? error.statusCode : null,
+          errorType: typeof error?.name === 'string' ? error.name.slice(0, 60) : 'Error',
+        });
       });
     }
 

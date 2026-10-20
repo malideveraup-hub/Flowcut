@@ -38,6 +38,13 @@ const barberSchema = new mongoose.Schema(
       enum: BARBER_AVAILABILITY,
       default: 'OFFLINE',
     },
+    // Short lease used while a start-service request reconciles availability
+    // and claims its queue entry. It distinguishes an in-flight reservation
+    // from stale BUSY availability left behind by an interrupted request.
+    serviceStartReservation: {
+      requestId: { type: String, default: null },
+      expiresAt: { type: Date, default: null },
+    },
     // Availability requests are naturally repeatable, but storing recent
     // request IDs lets a network retry replay the same barber action.
     actionReceipts: {

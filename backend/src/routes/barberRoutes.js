@@ -9,6 +9,8 @@ const router = Router();
 router.use(requireAuth, requireRole('barber'), attachBarberProfile);
 
 router.get('/dashboard', barberController.getMyDashboard);
+router.get('/services', barberController.listMyShopServices);
+router.post('/services', barberController.createMyShopService);
 router.patch('/availability', barberController.setMyAvailability);
 
 router.patch('/queue/:entryId/start', validateObjectIdParam('entryId'), queueController.startService);

@@ -1,4 +1,5 @@
 import * as queueService from '../services/queueService.js';
+import mongoose from 'mongoose';
 
 // ---- Public ----
 
@@ -158,6 +159,15 @@ export async function startService(req, res, next) {
     const entry = await queueService.startService(req.barber.shopId, req.barber.id, req.params.entryId, req.body?.requestId);
     res.json({ success: true, message: 'Service started.', data: { entryId: entry._id.toString() } });
   } catch (err) {
+    console.warn('[queue:start:response]', JSON.stringify({
+      requestId: req.body?.requestId || null,
+      barberId: String(req.barber.id),
+      shopId: String(req.barber.shopId),
+      targetEntryId: req.params.entryId,
+      databaseName: mongoose.connection.name || null,
+      httpStatus: err.statusCode || err.status || 500,
+      errorCode: err.code || 'START_SERVICE_ERROR',
+    }));
     next(err);
   }
 }

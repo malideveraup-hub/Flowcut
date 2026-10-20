@@ -29,5 +29,6 @@ const pushSubscriptionSchema = new mongoose.Schema(
 // different account updates its owner instead of creating duplicate sends.
 pushSubscriptionSchema.index({ endpoint: 1 }, { unique: true });
 pushSubscriptionSchema.index({ userId: 1 });
+pushSubscriptionSchema.index({ expirationTime: 1 }, { expireAfterSeconds: 0, sparse: true });
 
 export default mongoose.model('PushSubscription', pushSubscriptionSchema, 'pushsubscriptions');

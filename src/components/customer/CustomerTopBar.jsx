@@ -29,20 +29,25 @@ const ACCOUNT_ICONS = {
   logout: <><path d="M10 17l5-5-5-5M15 12H3" /><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6" /></>,
 };
 
+const PUSH_PROMPT_STORAGE_PREFIX = 'flowcut:push-prompt-dismissed:';
+
 function AccountIcon({ name }) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ACCOUNT_ICONS[name]}</svg>;
 }
 
 export default function CustomerTopBar({ notificationState, showNotifications = false }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
+  const [activePopup, setActivePopup] = useState(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [historyCount, setHistoryCount] = useState(null);
   const [favoritesCount, setFavoritesCount] = useState(null);
+  const [pushPromptDismissed, setPushPromptDismissed] = useState(false);
+  const [pushPromptUserKey, setPushPromptUserKey] = useState('');
   const notificationRef = useRef(null);
+  const notificationTriggerRef = useRef(null);
   const accountRef = useRef(null);
   const accountTriggerRef = useRef(null);
+  const menuRef = useRef(null);
+  const menuTriggerRef = useRef(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const email = typeof user?.email === 'string' ? user.email.trim() : '';
@@ -62,24 +67,42 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
     browserAlertError,
     browserPushEnabled,
     browserPushConfigured,
+    browserPushOptedOut,
+    browserPushStatusReady,
     browserPushNeedsHomeScreen,
     enableBrowserAlerts,
+    disableBrowserPush,
   } = notificationState;
+  const pushPromptIdentity = user?.id || user?.email || '';
+  const menuOpen = activePopup === 'menu';
+  const notificationsOpen = activePopup === 'notifications';
+  const accountOpen = activePopup === 'account';
 
   useEffect(() => {
-    function closeOnOutsidePointer(event) {
-      if (!notificationRef.current?.contains(event.target)) setNotificationsOpen(false);
+    if (!showNotifications || !pushPromptIdentity) {
+      setPushPromptDismissed(false);
+      setPushPromptUserKey('');
+      return undefined;
     }
-    function closeOnEscape(event) {
-      if (event.key === 'Escape') setNotificationsOpen(false);
+    let dismissed = false;
+    try {
+      dismissed = window.localStorage.getItem(`${PUSH_PROMPT_STORAGE_PREFIX}${pushPromptIdentity}`) === 'true';
+    } catch {
+      // The prompt can still be dismissed for this page session if storage is blocked.
     }
-    document.addEventListener('pointerdown', closeOnOutsidePointer);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, []);
+    setPushPromptDismissed(dismissed);
+    setPushPromptUserKey(pushPromptIdentity);
+    return undefined;
+  }, [showNotifications, pushPromptIdentity]);
+
+  function dismissPushPrompt() {
+    setPushPromptDismissed(true);
+    try {
+      window.localStorage.setItem(`${PUSH_PROMPT_STORAGE_PREFIX}${pushPromptIdentity}`, 'true');
+    } catch {
+      // Keep the dismissal for this page session if browser storage is unavailable.
+    }
+  }
 
   useEffect(() => {
     if (!accountOpen || !showNotifications || !user) return undefined;
@@ -100,14 +123,23 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
   }, [accountOpen, showNotifications, user]);
 
   useEffect(() => {
-    if (!accountOpen) return undefined;
+    if (!activePopup) return undefined;
     function closeOnOutsidePointer(event) {
-      if (!accountRef.current?.contains(event.target)) setAccountOpen(false);
+      const insidePopup = notificationRef.current?.contains(event.target)
+        || accountRef.current?.contains(event.target)
+        || menuRef.current?.contains(event.target)
+        || menuTriggerRef.current?.contains(event.target);
+      if (!insidePopup) setActivePopup(null);
     }
     function closeOnEscape(event) {
       if (event.key === 'Escape') {
-        setAccountOpen(false);
-        accountTriggerRef.current?.focus();
+        const trigger = activePopup === 'account'
+          ? accountTriggerRef.current
+          : activePopup === 'notifications'
+            ? notificationTriggerRef.current
+            : menuTriggerRef.current;
+        setActivePopup(null);
+        trigger?.focus();
       }
     }
     document.addEventListener('pointerdown', closeOnOutsidePointer);
@@ -116,23 +148,19 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
       document.removeEventListener('pointerdown', closeOnOutsidePointer);
       document.removeEventListener('keydown', closeOnEscape);
     };
-  }, [accountOpen]);
+  }, [activePopup]);
 
   function toggleNotifications() {
-    setNotificationsOpen((open) => !open);
-    setAccountOpen(false);
-    setMenuOpen(false);
+    setActivePopup((current) => current === 'notifications' ? null : 'notifications');
     void refresh().catch(() => {});
   }
 
   function toggleAccount() {
-    setAccountOpen((open) => !open);
-    setNotificationsOpen(false);
-    setMenuOpen(false);
+    setActivePopup((current) => current === 'account' ? null : 'account');
   }
 
   function closeAccount() {
-    setAccountOpen(false);
+    setActivePopup(null);
   }
 
   async function handleLogout() {
@@ -155,7 +183,7 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
         // Keep the dropdown usable while the notification API is unavailable.
       }
     }
-    setNotificationsOpen(false);
+    setActivePopup(null);
     navigate('/my-queue');
   }
 
@@ -170,7 +198,7 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
   return (
     <header className={styles.bar}>
       <div className={styles.inner}>
-        <Link to="/" className={styles.logo} onClick={() => setMenuOpen(false)}>
+        <Link to="/" className={styles.logo} onClick={() => setActivePopup(null)}>
           <BrandLogo />
         </Link>
         <nav className={styles.links} aria-label="Main navigation">
@@ -180,16 +208,17 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
               to={item.to}
               end={item.end}
               className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}
-              onClick={() => setMenuOpen(false)}
+              onClick={() => setActivePopup(null)}
             >
               {item.label}
             </NavLink>
           ))}
         </nav>
         <div className={styles.actions}>
-          <Link to="/discover" className={styles.joinLink} onClick={() => setMenuOpen(false)}>Join a queue</Link>
+          <Link to="/discover" className={styles.joinLink} onClick={() => setActivePopup(null)}>Join a queue</Link>
           {showNotifications && <div className={styles.notificationWrap} ref={notificationRef}>
             <button
+              ref={notificationTriggerRef}
               type="button"
               className={styles.notificationButton}
               aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
@@ -235,7 +264,7 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
                       Closed-browser reminders are not configured on this server yet. Page sound and browser alerts work while FlowCut is open.
                     </p>
                   ) : browserAlertPermission === 'denied' ? (
-                    <p className={styles.browserAlertStatus}>Allow notifications for FlowCut in your browser settings. Page sound works while FlowCut is open.</p>
+                    <p className={styles.browserAlertStatus}>Change FlowCut notification permission in your browser or device settings, then return here. The browser will not show another permission prompt while access is blocked. Page sound works while FlowCut is open.</p>
                   ) : browserAlertPermission === 'unsupported' ? (
                     <p className={styles.browserAlertStatus}>This browser cannot show system notifications. Page sound works while FlowCut is open.</p>
                   ) : browserAlertPermission === 'granted' ? (
@@ -263,6 +292,16 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
                             : browserAlertError
                               ? 'Retry push alerts'
                               : 'Enable push alerts and sound'}
+                    </button>
+                  )}
+                  {browserPushEnabled && (
+                    <button
+                      type="button"
+                      className={styles.enableBrowserAlertsButton}
+                      onClick={() => void disableBrowserPush()}
+                      disabled={browserAlertBusy}
+                    >
+                      {browserAlertBusy ? 'Updating alerts…' : 'Disable push alerts on this device'}
                     </button>
                   )}
                   {browserAlertError && !browserPushNeedsHomeScreen && (
@@ -295,7 +334,7 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
                 <Link
                   to="/notifications"
                   className={styles.allNotificationsLink}
-                  onClick={() => setNotificationsOpen(false)}
+                  onClick={() => setActivePopup(null)}
                 >
                   View all notifications
                 </Link>
@@ -351,12 +390,13 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
             )}
           </div>}
           <button
+            ref={menuTriggerRef}
             className={styles.menuButton}
             type="button"
             aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
             aria-expanded={menuOpen}
             aria-controls="customer-mobile-menu"
-            onClick={() => setMenuOpen((open) => !open)}
+            onClick={() => setActivePopup((current) => current === 'menu' ? null : 'menu')}
           >
             <span />
             <span />
@@ -364,22 +404,56 @@ export default function CustomerTopBar({ notificationState, showNotifications = 
           </button>
         </div>
         {menuOpen && (
-          <nav className={styles.mobileMenu} id="customer-mobile-menu" aria-label="Mobile navigation">
+          <nav ref={menuRef} className={styles.mobileMenu} id="customer-mobile-menu" aria-label="Mobile navigation">
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) => `${styles.mobileLink} ${isActive ? styles.active : ''}`}
-                onClick={() => setMenuOpen(false)}
+                onClick={() => setActivePopup(null)}
               >
                 {item.label}
               </NavLink>
             ))}
-            <Link to="/discover" className={styles.mobileCta} onClick={() => setMenuOpen(false)}>Join a queue <span aria-hidden="true">→</span></Link>
+            <Link to="/discover" className={styles.mobileCta} onClick={() => setActivePopup(null)}>Join a queue <span aria-hidden="true">→</span></Link>
           </nav>
         )}
       </div>
+      {showNotifications
+        && pushPromptIdentity
+        && pushPromptUserKey === pushPromptIdentity
+        && !pushPromptDismissed
+        && !browserPushEnabled
+        && !browserPushOptedOut
+        && browserPushStatusReady
+        && browserPushConfigured === true
+        && ['default', 'granted'].includes(browserAlertPermission)
+        && (
+          <aside className={styles.pushOptInPrompt} aria-labelledby="push-opt-in-title">
+            <div className={styles.pushOptInCopy}>
+              <strong id="push-opt-in-title">Queue reminders, even when FlowCut is closed</strong>
+              <p>Enable notifications to know when your turn is getting close.</p>
+              {browserPushNeedsHomeScreen && (
+                <p className={styles.pushOptInHint}>On iPhone or iPad, first use Share → Add to Home Screen, then open FlowCut from its icon.</p>
+              )}
+              {browserAlertError && <p className={styles.pushOptInError}>{browserAlertError}</p>}
+            </div>
+            <div className={styles.pushOptInActions}>
+              <button
+                type="button"
+                className={styles.pushOptInEnable}
+                onClick={() => void enableBrowserAlerts()}
+                disabled={browserAlertBusy}
+              >
+                {browserAlertBusy ? 'Enabling…' : 'Enable Notifications'}
+              </button>
+              <button type="button" className={styles.pushOptInDismiss} onClick={dismissPushPrompt}>
+                Not Now
+              </button>
+            </div>
+          </aside>
+        )}
       <Modal skin="clean" open={logoutOpen} onClose={() => setLogoutOpen(false)} title="Log out?">
         <p>Are you sure you want to log out?</p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>

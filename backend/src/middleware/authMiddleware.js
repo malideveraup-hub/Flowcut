@@ -139,6 +139,9 @@ export async function attachBarberProfile(req, res, next) {
     if (!barber) {
       return next(new AppError(404, 'Barber profile not found for this account.'));
     }
+    if (barber.status !== 'ACTIVE') {
+      return next(new AppError(403, 'Your barber profile is not active.'));
+    }
     req.barber = { id: barber._id.toString(), shopId: barber.shopId.toString() };
     next();
   } catch (err) {

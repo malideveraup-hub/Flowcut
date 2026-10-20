@@ -18,6 +18,7 @@ import {
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
+import NativeSelect from '../../components/ui/NativeSelect';
 import { useToast } from '../../components/ui/ToastContext';
 import styles from './QueueManagement.module.css';
 
@@ -283,28 +284,28 @@ export default function QueueManagement() {
           <input value={searchInput} onChange={(event) => { setSearchInput(event.target.value); resetPages(); }} placeholder="Search customer, queue #, or service" aria-label="Search queue" />
         </label>
         <div className={styles.filters}>
-          <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); resetPages(); }}>
+          <NativeSelect value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); resetPages(); }}>
             <option value="ALL">All statuses</option>
             <option value="WAITING">Waiting</option>
             <option value="ALMOST_UP">Almost up</option>
             <option value="IN_SERVICE">In service</option>
-          </select>
-          <select value={barberFilter} onChange={(event) => { setBarberFilter(event.target.value); resetPages(); }}>
+          </NativeSelect>
+          <NativeSelect value={barberFilter} onChange={(event) => { setBarberFilter(event.target.value); resetPages(); }}>
             <option value="">All barbers</option>
             {activeBarbers.map((barber) => <option key={barber._id} value={barber._id}>{barber.name}</option>)}
-          </select>
-          <select value={serviceFilter} onChange={(event) => { setServiceFilter(event.target.value); resetPages(); }}>
+          </NativeSelect>
+          <NativeSelect value={serviceFilter} onChange={(event) => { setServiceFilter(event.target.value); resetPages(); }}>
             <option value="">All services</option>
             {activeServices.map((service) => <option key={service.id || service._id} value={service.id || service._id}>{service.name}</option>)}
-          </select>
-          <select value={sort} onChange={(event) => { setSort(event.target.value); resetPages(); }}>
+          </NativeSelect>
+          <NativeSelect value={sort} onChange={(event) => { setSort(event.target.value); resetPages(); }}>
             <option value="queue">Queue position</option>
             <option value="joined">Time joined</option>
             <option value="wait">Estimated wait</option>
             <option value="status">Status</option>
             <option value="service">Service</option>
             <option value="barber">Barber</option>
-          </select>
+          </NativeSelect>
         </div>
       </div>
 
@@ -355,11 +356,11 @@ export default function QueueManagement() {
               <p>Completed, cancelled, and left-queue entries.</p>
             </div>
             <label className={styles.historySort}>Sort by
-              <select value={historySort} onChange={(event) => { setHistorySort(event.target.value); setHistoryPage(1); }}>
+              <NativeSelect value={historySort} onChange={(event) => { setHistorySort(event.target.value); setHistoryPage(1); }}>
                 <option value="newest">Most recent</option>
                 <option value="queue">Oldest</option>
                 <option value="joined">Customer name</option>
-              </select>
+              </NativeSelect>
             </label>
           </div>
           <div className={styles.historyTabs}>
@@ -371,6 +372,7 @@ export default function QueueManagement() {
           </div>
 
           <section className={styles.panel}>
+            <div className={styles.historyTableWrap}>
             <div className={styles.historyTableHead}><span>Customer</span><span>Queue</span><span>Service</span><span>Barber</span><span>Joined</span><span>Ended</span><span>Status</span><span></span></div>
             {historyEntries.length ? historyEntries.map((entry) => (
               <div className={styles.historyRow} key={entry.id}>
@@ -384,6 +386,7 @@ export default function QueueManagement() {
                 <span className={styles.historyAction}><button className={styles.viewButton} onClick={() => setDetailEntry(entry)}>View</button></span>
               </div>
             )) : <div className={styles.emptyTable}>No history entries for this filter.</div>}
+            </div>
             <div className={styles.tableFooter}><span>Showing {firstHistoryRow}–{lastHistoryRow} of {historyData.total} entries</span><div className={styles.pager}><button disabled={historyPage <= 1} onClick={() => setHistoryPage((current) => current - 1)}>Previous</button><button className={styles.pageCurrent} disabled>{historyPage}</button><button disabled={historyPage >= historyData.pages} onClick={() => setHistoryPage((current) => current + 1)}>Next</button></div></div>
           </section>
         </>
@@ -400,11 +403,11 @@ export default function QueueManagement() {
           />
           <div className={styles.field}>
             <label className={styles.label} htmlFor="service">Service</label>
-            <select id="service" className={styles.select} value={form.serviceId} onChange={(e) => setForm((f) => ({ ...f, serviceId: e.target.value }))}>
+            <NativeSelect id="service" className={styles.select} value={form.serviceId} onChange={(e) => setForm((f) => ({ ...f, serviceId: e.target.value }))}>
               {activeServices.map((s) => (
                 <option key={s.id || s._id} value={s.id || s._id}>{s.name} · {s.estimatedDuration} min</option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <Button type="submit" fullWidth disabled={submitting}>{submitting ? 'Adding…' : 'Add to queue'}</Button>
         </form>
@@ -412,8 +415,8 @@ export default function QueueManagement() {
 
       <Modal open={Boolean(editEntry)} onClose={() => setEditEntry(null)} title="Update queue entry">
         <form onSubmit={saveEdit}>
-          <div className={styles.field}><label className={styles.label} htmlFor="queue-barber">Barber</label><select id="queue-barber" className={styles.select} value={editForm.barberId} onChange={(event) => setEditForm((current) => ({ ...current, barberId: event.target.value }))}><option value="">Unassigned</option>{activeBarbers.map((barber) => <option key={barber._id} value={barber._id}>{barber.name}</option>)}</select></div>
-          <div className={styles.field}><label className={styles.label} htmlFor="queue-service">Service</label><select id="queue-service" className={styles.select} value={editForm.serviceId} onChange={(event) => setEditForm((current) => ({ ...current, serviceId: event.target.value }))}>{activeServices.map((service) => <option key={service.id || service._id} value={service.id || service._id}>{service.name}</option>)}</select></div>
+          <div className={styles.field}><label className={styles.label} htmlFor="queue-barber">Barber</label><NativeSelect id="queue-barber" className={styles.select} value={editForm.barberId} onChange={(event) => setEditForm((current) => ({ ...current, barberId: event.target.value }))}><option value="">Unassigned</option>{activeBarbers.map((barber) => <option key={barber._id} value={barber._id}>{barber.name}</option>)}</NativeSelect></div>
+          <div className={styles.field}><label className={styles.label} htmlFor="queue-service">Service</label><NativeSelect id="queue-service" className={styles.select} value={editForm.serviceId} onChange={(event) => setEditForm((current) => ({ ...current, serviceId: event.target.value }))}>{activeServices.map((service) => <option key={service.id || service._id} value={service.id || service._id}>{service.name}</option>)}</NativeSelect></div>
           <Button type="submit" fullWidth disabled={submitting || !editForm.serviceId}>Save changes</Button>
         </form>
       </Modal>

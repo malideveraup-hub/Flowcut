@@ -245,6 +245,116 @@
   box-shadow: 0 26px 58px -38px rgba(120,59,59,.16);
 }
 
+.heroActive .sectionLabel {
+  color: #F0E5D8;
+}
+
+.heroActive .customerName {
+  color: #FFFDFA;
+}
+
+.heroActive .queueNumber {
+  color: #E6CDB8;
+}
+
+.heroActive .serviceName {
+  color: #F0E5D8;
+}
+
+.heroActive .serviceName svg {
+  color: #E6CDB8;
+}
+
+.heroActive .badgeGreen {
+  background: rgba(0, 0, 0, .16);
+  color: #6EE7B7;
+}
+
+.heroActive .timerBox {
+  border-top-color: rgba(255, 253, 250, .38);
+}
+
+.heroActive .mutedLabel {
+  color: #E6D8CC;
+}
+
+.heroActive .timer {
+  background: linear-gradient(110deg, #FFFDFA, #E6CDB8);
+  background-clip: text;
+  color: transparent;
+}
+
+.heroActive .timer.timerWarning {
+  background: linear-gradient(110deg, #FEF3C7, #FBBF24);
+  background-clip: text;
+}
+
+.heroActive .timer.timerOver {
+  background: linear-gradient(110deg, #FEE2E2, #F87171);
+  background-clip: text;
+}
+
+.heroActive .timeMeta {
+  color: #E6D8CC;
+}
+
+.heroActive .timeMeta b {
+  color: #FFFDFA;
+}
+
+.heroActive .progress {
+  background: rgba(255, 253, 250, .3);
+}
+
+.heroActive .progress span {
+  background: #E6CDB8;
+}
+
+.heroActive .progressWarning span {
+  background: linear-gradient(90deg, #FBBF24, #F97316);
+}
+
+.heroActive .progressOverTrack span {
+  background: linear-gradient(90deg, #F87171, #EF4444);
+}
+
+.heroActive .delayNote {
+  color: #F0E5D8;
+}
+
+.heroActive .overNote {
+  color: #FFC1BD;
+}
+
+.heroActive .adjustButtons .button,
+.heroActive .timerAction {
+  border-color: rgba(255, 253, 250, .68);
+  background: rgba(255, 253, 250, .08);
+  color: #FFFDFA;
+}
+
+.heroActive .adjustButtons .button:hover:not(:disabled),
+.heroActive .timerAction:hover:not(:disabled) {
+  border-color: #FFFDFA;
+  background: rgba(255, 253, 250, .18);
+}
+
+.heroActive .adjustButtons .button:focus-visible,
+.heroActive .timerAction:focus-visible {
+  outline-color: #FFFDFA;
+}
+
+.heroActive .buttonPrimary {
+  border-color: #642F30;
+  background: #642F30;
+  color: #FFFDFA;
+}
+
+.heroActive .buttonPrimary:hover:not(:disabled) {
+  border-color: #542526;
+  background: #542526;
+}
+
 .cardHeading {
   display: flex;
   align-items: center;
@@ -508,12 +618,88 @@
   padding: 20px 18px 10px;
 }
 
+.servicesCard {
+  margin-top: 20px;
+  padding: 20px 22px;
+  border: 1px solid #DDD5C8;
+  border-radius: 20px;
+  background: #FFFDFA;
+}
+
+.servicesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.servicesHeader h2 {
+  margin: 4px 0 0;
+  color: #292723;
+  font-family: 'Space Grotesk', var(--font-sans);
+  font-size: 18px;
+}
+
+.serviceCatalog {
+  display: grid;
+  gap: 0;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.serviceRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) minmax(65px, .6fr) minmax(75px, .7fr) minmax(190px, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border-top: 1px solid #EEE8DF;
+  color: #6F6A62;
+  font-size: 12px;
+}
+
+.serviceCatalogName {
+  color: #292723;
+  font-weight: 600;
+}
+
+.serviceActive,
+.serviceInactive {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.serviceActive { color: #27734D; }
+.serviceInactive { color: #8B5B25; }
+
+.servicesMessage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 0;
+  color: #6F6A62;
+  font-size: 12px;
+}
+
+.servicesMessage button {
+  padding: 5px 8px;
+  border: 1px solid #DDD5C8;
+  border-radius: 8px;
+  background: transparent;
+  color: #783B3B;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .workloadCard { margin-top: 20px; padding: 22px; border: 1px solid #DDD5C8; border-radius: 20px; background: #FFFDFA; }
 .workloadHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .workloadHeader h2 { margin: 3px 0 0; color: #292723; font-size: 18px; }
 .workloadHeader p:not(.sectionLabel) { margin: 4px 0 0; color: #6F6A62; font-size: 11px; }
 .workloadAssignment { padding: 8px 11px; border-radius: 999px; background: #F4EFE7; color: #594837; font-size: 11px; font-weight: 600; }
-.workloadMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-top: 17px; }
+.workloadMetrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 17px; }
 .workloadMetrics > div { display: grid; gap: 5px; min-width: 0; padding: 11px; border: 1px solid #E7E0D6; border-radius: 10px; background: #FFFCF8; }
 .workloadMetrics span { color: #6F6A62; font-size: 10px; }
 .workloadMetrics strong { overflow-wrap: anywhere; color: #292723; font-size: 19px; }
@@ -727,6 +913,8 @@
 
   .queueCard { order: 2; }
   .workloadDetails { grid-template-columns: minmax(0, 1fr); }
+  .serviceRow { grid-template-columns: minmax(120px, 1fr) minmax(65px, auto) minmax(75px, auto); }
+  .serviceRow > :last-child { grid-column: 1 / -1; }
 }
 
 @media (max-width: 600px) {
@@ -738,6 +926,14 @@
     width: 100%;
     justify-content: space-between;
   }
+
+  .servicesCard { padding: 16px 13px; }
+  .servicesHeader { align-items: flex-start; }
+  .servicesHeader h2 { font-size: 16px; }
+  .servicesHeader .button { min-height: 40px; padding: 0 10px; white-space: nowrap; }
+  .serviceRow { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; }
+  .serviceRow > :last-child { grid-column: 1 / -1; }
+  .servicesMessage { align-items: flex-start; }
 
   .summary {
     flex-wrap: nowrap;

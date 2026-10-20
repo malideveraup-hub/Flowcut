@@ -1,18 +1,22 @@
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import { useToast } from '../../components/ui/ToastContext';
-import styles from './Dashboard.module.css';
+import styles from './PlatformSettings.module.css';
 
 export default function PlatformSettings() {
   const showToast = useToast();
 
   return (
-    <div>
-      <h1 className={styles.title}>Platform settings</h1>
-      <p className={styles.sub}>System-level configuration</p>
+    <main className={styles.page}>
+      <header className={styles.header}>
+        <p className={styles.eyebrow}>FLOWCUT PLATFORM</p>
+        <h1>Platform settings</h1>
+        <p className={styles.description}>Manage the defaults and support details used across the platform.</p>
+      </header>
 
-      <div className={styles.panel} style={{ maxWidth: 420 }}>
+      <section className={styles.formCard} aria-label="Platform settings">
         <form
+          className={styles.form}
           onSubmit={(e) => {
             e.preventDefault();
             showToast('Settings saved');
@@ -20,9 +24,9 @@ export default function PlatformSettings() {
         >
           <Input label="Support email" defaultValue="support@flowcut.app" />
           <Input label="Default reservation cutoff (minutes)" type="number" defaultValue={10} />
-          <Button type="submit">Save changes</Button>
+          <div className={styles.actions}><Button type="submit">Save changes</Button></div>
         </form>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

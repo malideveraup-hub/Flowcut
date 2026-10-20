@@ -4,10 +4,12 @@ import {
   fetchMyNotifications,
   markAllMyNotificationsRead,
   markMyNotificationRead,
+  removeMyPushSubscription,
   saveMyPushSubscription,
 } from '../api/shopApi';
 import {
   enableQueueBrowserAlerts,
+  disableQueueBrowserPush,
   getBrowserAlertPermission,
   requiresHomeScreenForPush,
   registerQueueAlertServiceWorker,
@@ -18,6 +20,11 @@ import {
 const POLL_INTERVAL_MS = 15_000;
 const RECENT_ALERT_WINDOW_MS = 2 * 60_000;
 const BROWSER_ALERT_TYPES = new Set(['NEAR_TURN', 'ARRIVE_SOON']);
+const PUSH_OPT_OUT_STORAGE_PREFIX = 'flowcut:push-opt-out:';
+
+function pushOptOutStorageKey(userId) {
+  return `${PUSH_OPT_OUT_STORAGE_PREFIX}${userId}`;
+}
 
 function recentQueueAlerts(notifications) {
   const cutoff = Date.now() - RECENT_ALERT_WINDOW_MS;
@@ -26,7 +33,7 @@ function recentQueueAlerts(notifications) {
     .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
 }
 
-export function useNotifications(enabled = true) {
+export function useNotifications(enabled = true, userId = null) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(enabled);
@@ -36,9 +43,37 @@ export function useNotifications(enabled = true) {
   const [browserAlertError, setBrowserAlertError] = useState('');
   const [browserPushEnabled, setBrowserPushEnabled] = useState(false);
   const [browserPushConfigured, setBrowserPushConfigured] = useState(null);
+  const [browserPushOptedOut, setBrowserPushOptedOut] = useState(false);
+  const [pushPreferenceLoaded, setPushPreferenceLoaded] = useState(false);
+  const [browserPushStatusReady, setBrowserPushStatusReady] = useState(false);
   const requestInFlight = useRef(false);
   const knownNotificationIds = useRef(null);
   const pushConfiguration = useRef(null);
+  const userDisabledPush = useRef(false);
+
+  useEffect(() => {
+    if (!enabled || !userId) {
+      userDisabledPush.current = false;
+      setBrowserPushOptedOut(false);
+      setPushPreferenceLoaded(true);
+      if (getBrowserAlertPermission() !== 'granted') setBrowserPushStatusReady(true);
+      return undefined;
+    }
+
+    setPushPreferenceLoaded(false);
+    setBrowserPushStatusReady(false);
+    let optedOut = false;
+    try {
+      optedOut = window.localStorage.getItem(pushOptOutStorageKey(userId)) === 'true';
+    } catch {
+      // If browser storage is unavailable, the active service-worker subscription still controls sync.
+    }
+    userDisabledPush.current = optedOut;
+    setBrowserPushOptedOut(optedOut);
+    setPushPreferenceLoaded(true);
+    if (optedOut || getBrowserAlertPermission() !== 'granted') setBrowserPushStatusReady(true);
+    return undefined;
+  }, [enabled, userId]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -49,6 +84,7 @@ export function useNotifications(enabled = true) {
         if (!active) return;
         pushConfiguration.current = configuration;
         setBrowserPushConfigured(configuration.enabled === true);
+        if (getBrowserAlertPermission() !== 'granted') setBrowserPushStatusReady(true);
       })
       .catch(() => {});
 
@@ -71,23 +107,35 @@ export function useNotifications(enabled = true) {
   }, [enabled, browserAlertPermission]);
 
   useEffect(() => {
-    if (!enabled || browserAlertPermission !== 'granted') return undefined;
+    if (!enabled || !pushPreferenceLoaded || browserAlertPermission !== 'granted') return undefined;
+    if (userDisabledPush.current) {
+      setBrowserPushStatusReady(true);
+      return undefined;
+    }
     let active = true;
 
     async function syncExistingSubscription() {
       try {
         const configuration = pushConfiguration.current || await fetchPushConfiguration();
+        if (!active || userDisabledPush.current) return;
         pushConfiguration.current = configuration;
         setBrowserPushConfigured(configuration.enabled === true);
         if (!configuration.enabled) return;
 
         const registration = await registerQueueAlertServiceWorker();
+        if (!active || userDisabledPush.current) return;
         const subscription = await registration.pushManager?.getSubscription();
-        if (!subscription) return;
+        if (!subscription || !active || userDisabledPush.current) return;
         await saveMyPushSubscription(subscription.toJSON());
+        if (!active || userDisabledPush.current) {
+          await removeMyPushSubscription(subscription.endpoint).catch(() => {});
+          return;
+        }
         if (active) setBrowserPushEnabled(true);
       } catch {
         // The in-page reminder still works if background push cannot sync.
+      } finally {
+        if (active) setBrowserPushStatusReady(true);
       }
     }
 
@@ -95,7 +143,7 @@ export function useNotifications(enabled = true) {
     return () => {
       active = false;
     };
-  }, [enabled, browserAlertPermission]);
+  }, [enabled, browserAlertPermission, pushPreferenceLoaded]);
 
   useEffect(() => {
     if (!enabled || !('serviceWorker' in navigator)) return undefined;
@@ -144,6 +192,11 @@ export function useNotifications(enabled = true) {
   }, [enabled, browserPushEnabled]);
 
   const enableBrowserAlerts = useCallback(async () => {
+    userDisabledPush.current = false;
+    setBrowserPushOptedOut(false);
+    if (userId) {
+      try { window.localStorage.removeItem(pushOptOutStorageKey(userId)); } catch { /* Storage may be unavailable. */ }
+    }
     setBrowserAlertBusy(true);
     setBrowserAlertError('');
     try {
@@ -204,8 +257,30 @@ export function useNotifications(enabled = true) {
       setBrowserAlertError(error.message || 'Could not enable browser alerts.');
     } finally {
       setBrowserAlertBusy(false);
+      setBrowserPushStatusReady(true);
     }
-  }, [browserPushEnabled]);
+  }, [browserPushEnabled, userId]);
+
+  const disableBrowserPush = useCallback(async () => {
+    userDisabledPush.current = true;
+    setBrowserPushOptedOut(true);
+    setBrowserPushEnabled(false);
+    if (userId) {
+      try { window.localStorage.setItem(pushOptOutStorageKey(userId), 'true'); } catch { /* Storage may be unavailable. */ }
+    }
+    setBrowserAlertBusy(true);
+    setBrowserAlertError('');
+    try {
+      const result = await disableQueueBrowserPush();
+      if (!result.removedFromServer) {
+        setBrowserAlertError('Push was disabled on this device, but the server could not confirm subscription removal.');
+      }
+    } catch (error) {
+      setBrowserAlertError(error.message || 'Could not disable push alerts on this device.');
+    } finally {
+      setBrowserAlertBusy(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -261,7 +336,10 @@ export function useNotifications(enabled = true) {
     browserAlertError,
     browserPushEnabled,
     browserPushConfigured,
+    browserPushOptedOut,
+    browserPushStatusReady,
     browserPushNeedsHomeScreen: requiresHomeScreenForPush(),
     enableBrowserAlerts,
+    disableBrowserPush,
   };
 }

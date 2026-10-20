@@ -15,16 +15,6 @@ export function fetchOwnShopAnalytics(filters = {}) {
   return apiRequest(`/api/shop-admin/analytics?${params.toString()}`);
 }
 
-export function fetchOwnShopAnalyticsInsights(filters = {}) {
-  return apiRequest('/api/shop-admin/analytics/insights', { method: 'POST', body: filters });
-}
-
-export function askOwnShopAnalyticsAssistant(message, history = [], filters = {}) {
-  return apiRequest('/api/shop-admin/analytics/chat', {
-    method: 'POST',
-    body: { message, history, filters },
-  });
-}
 
 export function fetchOwnShopQueueQr() {
   return apiRequest('/api/shop-admin/qr').then((d) => ({ shop: d.shop, qr: d.qr }));

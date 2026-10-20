@@ -1,3 +1,4 @@
+import NativeSelect from '../../components/ui/NativeSelect';
 import { useState } from 'react';
 import { useAsync } from '../../hooks/useAsync';
 import { fetchAllShops, fetchAllUsers } from '../../api/adminApi';
@@ -72,32 +73,32 @@ export default function UserManagement() {
           </label>
           <label className={styles.selectLabel}>
             <span className={styles.srOnly}>Filter by role</span>
-            <select value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value); setPage(1); }}>
+            <NativeSelect value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value); setPage(1); }}>
               <option value="all">All roles</option>
               <option value="customer">Customer</option>
               <option value="barber">Barber</option>
               <option value="shop_admin">Shop admin</option>
               <option value="super_admin">Super admin</option>
-            </select>
+            </NativeSelect>
           </label>
           <label className={styles.selectLabel}>
             <span className={styles.srOnly}>Filter by account status</span>
-            <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}>
+            <NativeSelect value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}>
               <option value="all">All statuses</option>
               <option value="ACTIVE">Active</option>
-            </select>
+            </NativeSelect>
           </label>
         </div>
         <label className={styles.sortLabel}>
           <span>Sort by</span>
-          <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
+          <NativeSelect value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
             <option value="name">Name</option>
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="role">Role</option>
             <option value="shop">Shop</option>
             <option value="status">Account status</option>
-          </select>
+          </NativeSelect>
         </label>
       </div>
 

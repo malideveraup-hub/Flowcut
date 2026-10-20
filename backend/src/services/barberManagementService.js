@@ -7,7 +7,7 @@ import {
   normalizeMobileNumber,
   validatePassword,
 } from '../validation/authValidation.js';
-import { validateRequestId } from '../validation/queueValidation.js';
+import { validateRequestId, ACTIVE_QUEUE_STATUSES } from '../validation/queueValidation.js';
 
 const SALT_ROUNDS = 12;
 const BARBER_STATUSES = ['ACTIVE', 'INACTIVE'];
@@ -87,7 +87,7 @@ async function requireOwnBarber(shopId, barberId) {
 }
 
 export async function updateBarberStatus(shopId, barberId, { status, availability }) {
-  await requireOwnBarber(shopId, barberId);
+  const barber = await requireOwnBarber(shopId, barberId);
 
   const update = {};
   if (status !== undefined) {
@@ -100,6 +100,26 @@ export async function updateBarberStatus(shopId, barberId, { status, availabilit
   }
   if (Object.keys(update).length === 0) {
     throw new AppError(400, 'Nothing to update.');
+  }
+
+  if (status === 'INACTIVE' && barber.status !== 'INACTIVE') {
+    const assignedQueueEntry = await QueueEntry.exists({
+      shopId,
+      barberId,
+      status: { $in: ACTIVE_QUEUE_STATUSES },
+    });
+    if (assignedQueueEntry) {
+      throw new AppError(409, 'This barber has active or upcoming queue entries. Reassign or finish them before deactivation.');
+    }
+
+    update.availability = 'OFFLINE';
+    const deactivated = await Barber.findOneAndUpdate(
+      { _id: barberId, shopId, status: 'ACTIVE', availability: { $ne: 'BUSY' } },
+      { $set: update },
+      { new: true }
+    );
+    if (deactivated) return deactivated;
+    throw new AppError(409, 'This barber became busy. Finish the active service before deactivation.');
   }
 
   return Barber.findOneAndUpdate({ _id: barberId, shopId }, { $set: update }, { new: true });

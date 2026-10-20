@@ -17,7 +17,6 @@ test('map image management endpoints reject unauthenticated requests before touc
     ['PUT', '/api/shops/507f1f77bcf86cd799439011/rating', { rating: 5 }],
     ['POST', '/api/shop-admin/map-images', { title: 'No access' }],
     ['POST', '/api/shop-admin/analytics/chat', { message: 'What are the busiest hours?' }],
-    ['POST', '/api/shop-admin/analytics/insights', { from: '2026-10-01', to: '2026-10-07' }],
     ['GET', `/api/shop-admin/map-images/${imageId}/image`],
     ['POST', `/api/shop-admin/map-images/${imageId}/image`, Buffer.from([0xff, 0xd8, 0xff]), 'image/jpeg'],
     ['PATCH', `/api/shop-admin/map-images/${imageId}`, { title: 'No access' }],

@@ -44,21 +44,3 @@ export const passwordResetLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: 'Too many password reset requests. Please try again later.', errors: [] },
 });
-
-export const analyticsInsightsLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 8,
-  keyGenerator: (req) => `shop:${req.user.shopId}`,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many AI analytics requests. Please try again later.', errors: [] },
-});
-
-export const analyticsChatLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 24,
-  keyGenerator: (req) => `shop:${req.user.shopId}`,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many assistant messages. Please try again later.', errors: [] },
-});

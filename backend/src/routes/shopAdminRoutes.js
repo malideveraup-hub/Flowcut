@@ -8,7 +8,6 @@ import * as mapImageController from '../controllers/mapImageController.js';
 import * as analyticsController from '../controllers/analyticsController.js';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import { noStoreApiResponse } from '../middleware/noStoreApiResponse.js';
-import { analyticsChatLimiter, analyticsInsightsLimiter } from '../middleware/rateLimiters.js';
 import { validateObjectIdParam } from '../utils/mongoId.js';
 
 const router = Router();
@@ -35,8 +34,6 @@ router.delete('/map-images/:imageId', mapImageController.validateMapImageId, map
 router.get('/shop', shopController.getOwnShop);
 router.get('/dashboard-summary', shopController.getOwnShopDashboardSummary);
 router.get('/analytics', noStoreApiResponse, analyticsController.getOwnShopAnalytics);
-router.post('/analytics/insights', noStoreApiResponse, analyticsInsightsLimiter, analyticsController.getOwnShopAnalyticsInsights);
-router.post('/analytics/chat', noStoreApiResponse, analyticsChatLimiter, analyticsController.chatWithOwnShopAnalytics);
 router.get('/qr', shopController.getOwnShopQueueQr);
 router.patch('/shop', shopController.updateOwnShop);
 

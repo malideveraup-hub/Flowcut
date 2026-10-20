@@ -1,3 +1,4 @@
+import NativeSelect from '../../components/ui/NativeSelect';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync';
@@ -126,12 +127,12 @@ export default function ShopManagement() {
           </label>
           <label className={styles.sortLabel}>
             <span>Sort by</span>
-            <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
+            <NativeSelect value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
               <option value="name">Shop name</option>
               <option value="status">Status</option>
-            </select>
+            </NativeSelect>
           </label>
         </div>
       </div>

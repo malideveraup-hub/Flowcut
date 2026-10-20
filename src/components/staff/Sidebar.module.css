@@ -187,6 +187,7 @@
   .logo, .subtitle { display: none; }
   .item { margin-bottom: 0; white-space: nowrap; }
   .sidebar nav { display: flex; gap: 4px; }
+  .sidebar:not(.superAdmin) nav { flex: 0 0 auto; min-width: max-content; }
 
   .superAdmin {
     width: 248px;

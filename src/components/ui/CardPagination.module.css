@@ -1,0 +1,41 @@
+.pagination {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid #E6DED3;
+  color: #6F6A62;
+  font-size: 12px;
+}
+
+.range { min-width: 0; }
+.controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.page { min-width: 76px; color: #514C45; font-weight: 600; text-align: center; }
+.button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #DDD5C8;
+  border-radius: 8px;
+  background: #fff;
+  color: #514C45;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, color .16s ease;
+}
+.button:hover:not(:disabled) { border-color: #A58B66; background: #F7F4EE; color: #292723; }
+.button:focus-visible { outline: 2px solid #783B3B; outline-offset: 2px; }
+.button:disabled { background: #F7F4EE; color: #9C968D; cursor: not-allowed; }
+
+@media (max-width: 520px) {
+  .pagination { align-items: flex-start; flex-direction: column; }
+  .controls { width: 100%; justify-content: space-between; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button { transition: none; }
+}

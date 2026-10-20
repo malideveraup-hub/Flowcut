@@ -12,6 +12,14 @@ export function fetchBarberDashboard() {
   return apiRequest('/api/barber/dashboard');
 }
 
+export function fetchMyShopServices() {
+  return apiRequest('/api/barber/services').then((data) => data.services);
+}
+
+export function createMyShopService(fields) {
+  return apiRequest('/api/barber/services', { method: 'POST', body: fields }).then((data) => data.service);
+}
+
 export function setMyAvailability(availability, requestId = createRequestId()) {
   return apiRequest('/api/barber/availability', { method: 'PATCH', body: { availability, requestId } }).then((d) => d.barber);
 }

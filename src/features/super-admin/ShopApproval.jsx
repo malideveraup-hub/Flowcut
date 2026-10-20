@@ -1,3 +1,4 @@
+import NativeSelect from '../../components/ui/NativeSelect';
 import { useEffect, useState } from 'react';
 import { approveShop, fetchAllShops, fetchAllUsers, rejectShop } from '../../api/adminApi';
 import { fetchAdminShopApplicationDocument } from '../../api/shopApi';
@@ -180,12 +181,12 @@ export default function ShopApproval() {
           </label>
           <label className={styles.sortLabel}>
             <span>Sort by</span>
-            <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
+            <NativeSelect value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
               <option value="location">Location</option>
               <option value="status">Application status</option>
-            </select>
+            </NativeSelect>
           </label>
         </div>
       </div>

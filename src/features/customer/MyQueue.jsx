@@ -250,13 +250,13 @@ export default function MyQueue() {
         </div>
       </div>
 
-      <Modal skin="pixel" open={leaveOpen} onClose={() => setLeaveOpen(false)} title="Leave queue?">
+      <Modal skin="barber" open={leaveOpen} onClose={() => setLeaveOpen(false)} title="Leave queue?">
         <p style={{ marginBottom: 16 }}>You'll lose your spot at {shopName}.</p>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button skin="pixel" variant="secondary" onClick={() => setLeaveOpen(false)} disabled={leaving}>
+          <Button variant="secondary" onClick={() => setLeaveOpen(false)} disabled={leaving}>
             Stay in queue
           </Button>
-          <Button skin="pixel" variant="destructive" onClick={handleLeave} disabled={leaving}>
+          <Button variant="destructive" onClick={handleLeave} disabled={leaving}>
             {leaving ? 'Leaving…' : 'Leave queue'}
           </Button>
         </div>

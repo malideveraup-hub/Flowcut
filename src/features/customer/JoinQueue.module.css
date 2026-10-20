@@ -118,7 +118,7 @@
   border: 2px solid #DDD5C8;
   border-radius: 50%;
   color: #fff;
-  transition: background .2s, border-color .2s;
+  transition: background .22s ease, border-color .22s ease, transform .22s ease;
 }
 
 .selectionDot svg {
@@ -130,13 +130,19 @@
 }
 
 .selectionDotActive {
-  border-color: transparent;
-  background: #FFFDFA;
+  border-color: #278451;
+  background: #278451;
+  transform: scale(1.06);
 }
 
 .selectionDotActive svg {
   opacity: 1;
   transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selectionDot,
+  .selectionDot svg { transition: none; }
 }
 
 .serviceInfo {

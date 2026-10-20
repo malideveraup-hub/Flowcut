@@ -111,6 +111,7 @@ export default function JoinQueue() {
             key={s.id}
             type="button"
             className={[styles.serviceOption, serviceId === s.id ? styles.serviceOptionActive : ''].join(' ')}
+            data-scroll-reveal
             aria-pressed={serviceId === s.id}
             onClick={() => selectService(s.id)}
           >
@@ -152,13 +153,13 @@ export default function JoinQueue() {
         </section>
       </main>
 
-      <Modal skin="pixel" open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Confirm">
+      <Modal skin="barber" open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Confirm and join">
         <p style={{ marginBottom: 16 }}>Join the queue at {shop.name} for this service?</p>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button skin="pixel" variant="secondary" onClick={() => setConfirmOpen(false)} disabled={joining}>
+          <Button variant="secondary" onClick={() => setConfirmOpen(false)} disabled={joining}>
             Cancel
           </Button>
-          <Button skin="pixel" onClick={handleJoin} disabled={joining}>
+          <Button onClick={handleJoin} disabled={joining}>
             {joining ? 'Joining…' : 'Join queue'}
           </Button>
         </div>

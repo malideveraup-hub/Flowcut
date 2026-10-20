@@ -1,0 +1,125 @@
+.page {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  color: #292723;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.heading { min-width: 0; }
+.eyebrow { margin: 0 0 5px; color: #783B3B; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.title { margin: 0; color: #292723; font-size: clamp(23px, 3vw, 29px); line-height: 1.2; }
+.sub { margin: 5px 0 0; color: #6F6A62; font-size: 13px; }
+
+.panel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #DDD5C8;
+  border-radius: 15px;
+  background: #FFFDFA;
+  box-shadow: 0 8px 24px -22px rgba(41, 39, 35, .35);
+}
+
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.filters { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.filterButton,
+.actionButton {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid #DDD5C8;
+  border-radius: 9px;
+  background: #fff;
+  color: #514C45;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+}
+
+.filterButton:hover,
+.actionButton:hover:not(:disabled) { border-color: #A58B66; background: #F7F4EE; }
+.filterButton[aria-pressed="true"] { border-color: #783B3B; background: #F0E2DE; color: #783B3B; }
+.actionButton:active:not(:disabled) { transform: translateY(1px); }
+.actionButton:focus-visible,
+.filterButton:focus-visible,
+.input:focus-visible,
+.select:focus-visible { outline: 2px solid #783B3B; outline-offset: 2px; }
+.actionButton:disabled { cursor: not-allowed; opacity: .55; }
+.primaryButton { border-color: #783B3B; background: #783B3B; color: #fff; }
+.primaryButton:hover:not(:disabled) { border-color: #642F30; background: #642F30; }
+.dangerButton { border-color: #D8B9B4; color: #8A3732; }
+.dangerButton:hover:not(:disabled) { border-color: #B96B63; background: #FBEEEC; }
+.smallButton { min-height: 33px; padding: 6px 10px; font-size: 11px; }
+
+.cardGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.cardGridSpaced { margin-top: 14px; }
+.personCard,
+.serviceCard { min-width: 0; padding: 15px; border: 1px solid #E6DED3; border-radius: 12px; background: #fff; }
+.cardTop { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.identity { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.avatar { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 12px; background: #F0E2DE; color: #783B3B; font-size: 14px; font-weight: 700; }
+.cardTitle { overflow-wrap: anywhere; margin: 0; color: #292723; font-size: 15px; font-weight: 700; }
+.cardSub { margin: 4px 0 0; color: #6F6A62; font-size: 11px; }
+.metaGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 14px; }
+.meta { display: grid; gap: 4px; min-width: 0; padding: 9px 10px; border-radius: 9px; background: #F7F4EE; }
+.meta span { color: #6F6A62; font-size: 10px; }
+.meta strong { overflow-wrap: anywhere; color: #292723; font-size: 12px; }
+.cardActions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
+.badge { display: inline-flex; align-items: center; justify-content: center; min-height: 24px; padding: 4px 9px; border-radius: 999px; background: #F0E2DE; color: #783B3B; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.badgeGreen { background: #E5F6EF; color: #18724F; }
+.badgeAmber { background: #FFF3DF; color: #8C5C13; }
+.badgeMuted { background: #EEE8DE; color: #5C5146; }
+.notice { margin: 0; padding: 11px 13px; border: 1px solid #E6DED3; border-radius: 10px; background: #fff; color: #514C45; font-size: 12px; }
+.errorNotice { border-color: #E8C2BD; background: #FBEEEC; color: #8A3732; }
+.empty { padding: 25px 12px; color: #6F6A62; font-size: 13px; text-align: center; }
+
+.form { display: grid; gap: 14px; }
+.formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+.field { display: grid; align-content: start; gap: 6px; min-width: 0; margin-bottom: 13px; }
+.fieldLabel { color: #514C45; font-size: 12px; font-weight: 600; }
+.input,
+.select { width: 100%; min-width: 0; min-height: 42px; padding: 9px 11px; border: 1px solid #DDD5C8; border-radius: 9px; background: #fff; color: #292723; font: inherit; font-size: 13px; }
+.input[aria-invalid="true"],
+.select[aria-invalid="true"] { border-color: #B6534B; }
+.fieldError { margin: 0; color: #9B3732; font-size: 11px; }
+.formActions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+.modalCopy { margin: 0 0 14px; color: #514C45; font-size: 13px; line-height: 1.55; }
+.settingsGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.settingsGroup { min-width: 0; padding: 16px; border: 1px solid #E6DED3; border-radius: 12px; background: #fff; }
+.groupTitle { margin: 0 0 13px; color: #292723; font-size: 14px; }
+.saveBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid #E6DED3; border-radius: 11px; background: #fff; }
+.dirtyLabel { color: #8C5C13; font-size: 12px; font-weight: 600; }
+.cleanLabel { color: #18724F; font-size: 12px; }
+
+@media (max-width: 680px) {
+  .panel { padding: 14px; }
+  .settingsGrid,
+  .formGrid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .header { align-items: flex-start; }
+  .header > .actionButton { width: 100%; }
+  .cardGrid { grid-template-columns: minmax(0, 1fr); }
+  .saveBar { align-items: stretch; flex-direction: column; }
+  .formActions > .actionButton { flex: 1; }
+}
+
+@media (min-width: 681px) and (max-width: 960px) {
+  .cardGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .filterButton,
+  .actionButton { transition: none; }
+}

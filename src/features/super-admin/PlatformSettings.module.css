@@ -1,0 +1,35 @@
+.page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--staff-ink);
+}
+
+.header { margin-bottom: 20px; }
+.eyebrow { margin: 0 0 6px; color: var(--brand-oxblood); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.header h1 { margin: 0; font-size: clamp(22px, 2.3vw, 28px); line-height: 1.2; }
+.description { margin: 6px 0 0; color: var(--staff-secondary); font-size: 13px; line-height: 1.5; }
+
+.formCard {
+  width: min(100%, 640px);
+  padding: 24px;
+  border: 1px solid var(--brand-stone);
+  border-radius: 12px;
+  background: #FFFCF8;
+  box-shadow: 0 5px 18px rgb(32 32 30 / 4%);
+}
+
+.form { display: grid; gap: 4px; }
+.form :global(input) { width: 100%; min-height: 42px; border-radius: 9px; border-color: var(--brand-stone); background: #fff; }
+.form :global(input:focus) { border-color: var(--brand-oxblood); box-shadow: 0 0 0 3px rgb(120 59 59 / 12%); }
+.actions { display: flex; justify-content: flex-end; padding-top: 8px; }
+.actions button { min-height: 42px; padding-inline: 18px; }
+.actions button:hover { background: #642F30; }
+.actions button:active { transform: translateY(1px); }
+.actions button:disabled { opacity: .65; cursor: not-allowed; }
+
+@media (max-width: 600px) {
+  .header { margin-bottom: 16px; }
+  .formCard { padding: 17px; border-radius: 10px; }
+  .actions button { width: 100%; }
+}

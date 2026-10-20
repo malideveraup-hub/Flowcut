@@ -7,9 +7,9 @@ import styles from './CustomerLayout.module.css';
 
 export default function CustomerLayout() {
   const location = useLocation();
-  const { role, loading: authLoading } = useAuth();
+  const { role, user, loading: authLoading } = useAuth();
   const showNotifications = !authLoading && role === 'customer';
-  const notificationState = useNotifications(showNotifications);
+  const notificationState = useNotifications(showNotifications, user?.id);
 
   return (
     <div className={styles.shell}>

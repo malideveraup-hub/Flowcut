@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync';
 import Modal from '../../components/ui/Modal';
+import AddServiceModal from '../../components/services/AddServiceModal';
 import {
   fetchBarberDashboard,
+  fetchMyShopServices,
+  createMyShopService,
   setMyAvailability,
   startService as startServiceRequest,
   pauseService as pauseServiceRequest,
@@ -12,6 +15,7 @@ import {
   applyDelay as applyDelayRequest,
 } from '../../api/barberApi';
 import { useToast } from '../../components/ui/ToastContext';
+import { startServiceWithConflictRecovery } from './startServiceFlow.js';
 import styles from './BarberHome.module.css';
 
 const REFRESH_INTERVAL_MS = 15_000;
@@ -137,10 +141,12 @@ function QueueEntryRow({ entry, index, highlighted = false }) {
 
 export default function BarberHome() {
   const { data, loading, error, updatedAt, refetch } = useAsync(fetchBarberDashboard);
+  const { data: shopServices, loading: servicesLoading, error: servicesError, refetch: refetchServices } = useAsync(fetchMyShopServices);
   const showToast = useToast();
   const navigate = useNavigate();
   const [pendingAction, setPendingAction] = useState('');
   const [finishConfirmationOpen, setFinishConfirmationOpen] = useState(false);
+  const [addServiceOpen, setAddServiceOpen] = useState(false);
   const [wallClock, setWallClock] = useState(0);
   const [timerAnnouncement, setTimerAnnouncement] = useState('');
   const actionPendingRef = useRef(false);
@@ -185,7 +191,7 @@ export default function BarberHome() {
   }, [current?.id, timerState]);
 
   const syncDashboard = useCallback(async ({ quiet = true } = {}) => {
-    await refetch({ quiet, throwOnError: true });
+    return refetch({ quiet, throwOnError: true });
   }, [refetch]);
 
   useEffect(() => {
@@ -212,12 +218,8 @@ export default function BarberHome() {
     try {
       const result = await action();
       const message = typeof successMessage === 'function' ? successMessage(result) : successMessage;
-      try {
-        await syncDashboard();
-        showToast(message);
-      } catch {
-        showToast(`${message} The workspace couldn't refresh; try again shortly.`, 'error');
-      }
+      showToast(message);
+      await syncDashboard().catch(() => {});
     } catch (actionError) {
       // A failed response can arrive after the server committed a change.
       // Re-read the authoritative state before showing the error.
@@ -229,7 +231,7 @@ export default function BarberHome() {
       if (actionError.status === 401) {
         navigate('/login', { replace: true });
       } else if (actionError.status === 409 && actionName !== 'break') {
-        showToast('This entry was already updated. Showing the latest.', 'error');
+        showToast(actionError.message || 'The queue changed. The latest workspace data is shown.', 'error');
       } else {
         showToast("That didn't go through. Please try again.", 'error');
       }
@@ -462,7 +464,11 @@ export default function BarberHome() {
                 className={`${styles.button} ${styles.buttonPrimary} ${styles.buttonBig}`}
                 type="button"
                 disabled={isBusy || onBreak}
-                onClick={() => runAction('start', () => startServiceRequest(next.id), `Started service for ${next.customerName || 'Customer'}`)}
+                onClick={() => runAction(
+                  'start',
+                  () => startServiceWithConflictRecovery(next.id, startServiceRequest, () => syncDashboard({ quiet: true })),
+                  `Started service for ${next.customerName || 'Customer'}`
+                )}
               >
                 {isBusy && pendingAction === 'start' ? <span className={styles.spinner} /> : <Icon name="play" />}
                 {isBusy && pendingAction === 'start' ? 'Starting…' : 'Start service'}
@@ -506,6 +512,51 @@ export default function BarberHome() {
           )}
         </section>
       </div>
+      <section className={styles.servicesCard} aria-labelledby="barber-services-title">
+        <div className={styles.servicesHeader}>
+          <div>
+            <p className={styles.sectionLabel}>Shop services</p>
+            <h2 id="barber-services-title">Services customers can choose</h2>
+          </div>
+          <button
+            type="button"
+            className={`${styles.button} ${styles.buttonPrimary} ${styles.buttonSmall}`}
+            onClick={() => setAddServiceOpen(true)}
+          >
+            + Add Service
+          </button>
+        </div>
+        {servicesError ? (
+          <div className={styles.servicesMessage} role="status">
+            <span>{servicesError.message || 'Could not load shop services.'}</span>
+            <button type="button" onClick={() => void refetchServices()}>Try again</button>
+          </div>
+        ) : servicesLoading && !shopServices ? (
+          <p className={styles.servicesMessage}>Loading shop services…</p>
+        ) : shopServices?.length ? (
+          <ul className={styles.serviceCatalog}>
+            {shopServices.map((service) => (
+              <li className={styles.serviceRow} key={service._id}>
+                <span className={styles.serviceCatalogName}>{service.name}</span>
+                <span>{service.estimatedDuration} min</span>
+                <span>₱{Number(service.price).toLocaleString()}</span>
+                <span className={service.status === 'ACTIVE' ? styles.serviceActive : styles.serviceInactive}>
+                  {service.status === 'ACTIVE' ? 'Active · customer-visible' : 'Inactive · hidden from customers'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.servicesMessage}>No services yet. Add a service to make it available in the shop.</p>
+        )}
+      </section>
+      <AddServiceModal
+        open={addServiceOpen}
+        onClose={() => setAddServiceOpen(false)}
+        onCreate={createMyShopService}
+        onCreated={() => refetchServices()}
+        successMessage="Service added and active for customers."
+      />
       {data?.workload && (
         <section className={styles.workloadCard} aria-labelledby="personal-workload-title">
           <div className={styles.workloadHeader}>
@@ -515,8 +566,7 @@ export default function BarberHome() {
           <div className={styles.workloadMetrics}>
             <div><span>Completed services</span><strong>{data.workload.completedCount}</strong></div>
             <div><span>Average service duration</span><strong>{Number.isFinite(data.workload.averageDurationMinutes) ? `${Math.round(data.workload.averageDurationMinutes)} min` : 'N/A'}</strong></div>
-            <div><span>Median service duration</span><strong>{Number.isFinite(data.workload.medianDurationMinutes) ? `${Math.round(data.workload.medianDurationMinutes)} min` : 'N/A'}</strong></div>
-            <div><span>Valid duration samples</span><strong>{data.workload.durationSampleCount}{data.workload.durationExcludedCount ? ` · ${data.workload.durationExcludedCount} excluded` : ''}</strong></div>
+            <div><span>Services completed today</span><strong>{Number.isInteger(data.workload.completedTodayCount) ? data.workload.completedTodayCount : '—'}</strong></div>
           </div>
           <div className={styles.workloadDetails}>
             <div><h3>Recent completed services</h3><div className={styles.workloadTrend}>

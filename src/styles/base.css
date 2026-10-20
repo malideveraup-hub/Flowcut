@@ -42,3 +42,27 @@ a {
   outline: 2px solid var(--staff-accent);
   outline-offset: 2px;
 }
+
+/* Progressive enhancement: content stays visible until observation is ready. */
+html.scroll-reveal-ready [data-scroll-reveal]:not([data-scroll-revealed='true']) {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+[data-scroll-reveal] {
+  transition: opacity 280ms ease, transform 280ms ease;
+}
+
+[data-scroll-reveal][data-scroll-revealed='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.scroll-reveal-ready [data-scroll-reveal],
+  [data-scroll-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

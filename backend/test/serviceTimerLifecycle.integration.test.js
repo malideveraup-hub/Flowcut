@@ -24,6 +24,7 @@ test('repeat and different-customer services each get independent timer records'
     joinQueue,
     applyDelay,
     startService,
+    cancelEntryByStaff,
   } = await import('../src/services/queueService.js');
 
   const testDatabaseName = `fc_timer_${Date.now().toString(36)}_${randomUUID().replaceAll('-', '').slice(0, 6)}`;
@@ -73,6 +74,7 @@ test('repeat and different-customer services each get independent timer records'
       price: 0,
       status: 'ACTIVE',
     });
+    assert.equal((await getBarberDashboard(shop._id, barber._id)).workload.completedTodayCount, 0);
 
     async function joinAssignedCustomer(customer) {
       const entry = await joinQueue(String(customer._id), String(shop._id), String(service._id));
@@ -84,6 +86,9 @@ test('repeat and different-customer services each get independent timer records'
     const firstEntry = await joinAssignedCustomer(customerA);
     const firstStartRequest = randomUUID();
     await startService(shop._id, barber._id, firstEntry._id, firstStartRequest);
+    await startService(shop._id, barber._id, firstEntry._id, firstStartRequest);
+    assert.equal((await QueueEntry.findById(firstEntry._id)).status, 'IN_SERVICE');
+    assert.equal(await ServiceLog.countDocuments({ queueEntryId: firstEntry._id }), 1);
     await ServiceLog.findOneAndUpdate(
       { queueEntryId: firstEntry._id },
       { $set: { startTime: new Date(Date.now() - 12 * 60_000) } }
@@ -93,15 +98,47 @@ test('repeat and different-customer services each get independent timer records'
     const firstFinishRequest = randomUUID();
     await finishService(shop._id, barber._id, firstEntry._id, firstFinishRequest);
     const finishedAt = (await ServiceLog.findOne({ queueEntryId: firstEntry._id })).endTime;
+    const firstDashboard = await getBarberDashboard(shop._id, barber._id);
+    assert.equal(firstDashboard.workload.completedTodayCount, 1);
     await finishService(shop._id, barber._id, firstEntry._id, firstFinishRequest);
+    assert.equal((await getBarberDashboard(shop._id, barber._id)).workload.completedTodayCount, 1);
     assert.equal((await QueueEntry.findById(firstEntry._id)).status, 'COMPLETED');
     assert.equal((await ServiceLog.findOne({ queueEntryId: firstEntry._id })).endTime.getTime(), finishedAt.getTime());
     assert.equal(await getMyActiveQueueEntry(customerA._id), null);
 
+    stage = 'recovering stale BUSY availability without an active service';
+    await Barber.updateOne({ _id: barber._id }, { $set: { availability: 'BUSY' } });
+    const staleBusyEntry = await joinAssignedCustomer(customerA);
+    await startService(shop._id, barber._id, staleBusyEntry._id, randomUUID());
+    assert.equal((await QueueEntry.findById(staleBusyEntry._id)).status, 'IN_SERVICE');
+    assert.equal((await Barber.findById(barber._id)).availability, 'BUSY');
+
+    stage = 'rejecting a second entry while an active service exists';
+    const whileServingEntry = await joinAssignedCustomer(customerB);
+    await assert.rejects(
+      startService(shop._id, barber._id, whileServingEntry._id, randomUUID()),
+      /already has an active service/
+    );
+    await finishService(shop._id, barber._id, staleBusyEntry._id, randomUUID());
+
+    stage = 'rejecting a start after a shop actor cancels the entry';
+    const cancelledEntry = whileServingEntry;
+    await cancelEntryByStaff(shop._id, cancelledEntry._id);
+    await assert.rejects(
+      startService(shop._id, barber._id, cancelledEntry._id, randomUUID()),
+      /Can't start service from status CANCELLED/
+    );
+
     stage = 'immediate repeat join and timer refresh';
     const secondEntry = await joinAssignedCustomer(customerA);
     assert.notEqual(String(secondEntry._id), String(firstEntry._id));
-    await startService(shop._id, barber._id, secondEntry._id, randomUUID());
+    const concurrentRequestIds = [randomUUID(), randomUUID()];
+    const concurrentStarts = await Promise.allSettled(concurrentRequestIds.map((requestId) =>
+      startService(shop._id, barber._id, secondEntry._id, requestId)
+    ));
+    assert.equal(concurrentStarts.filter((result) => result.status === 'fulfilled').length, 1);
+    assert.equal((await QueueEntry.findById(secondEntry._id)).status, 'IN_SERVICE');
+    assert.equal(await ServiceLog.countDocuments({ queueEntryId: secondEntry._id }), 1);
 
     const firstLog = await ServiceLog.findOne({ queueEntryId: firstEntry._id });
     const secondLog = await ServiceLog.findOne({ queueEntryId: secondEntry._id });
@@ -113,6 +150,7 @@ test('repeat and different-customer services each get independent timer records'
 
     const customerRefresh = await getMyActiveQueueEntry(customerA._id);
     const barberRefresh = await getBarberDashboard(shop._id, barber._id);
+    assert.equal(barberRefresh.workload.completedTodayCount, 1);
     assert.equal(customerRefresh.id, String(secondEntry._id));
     assert.equal(customerRefresh.status, 'IN_SERVICE');
     assert.equal(barberRefresh.current.id, String(secondEntry._id));
@@ -154,6 +192,7 @@ test('repeat and different-customer services each get independent timer records'
     assert.equal(barberPage.cacheControl, 'private, no-store');
     assert.equal(customerPage.body.data.entry.id, String(secondCustomerEntry._id));
     assert.equal(barberPage.body.data.current.id, String(secondCustomerEntry._id));
+    assert.equal(barberPage.body.data.workload.completedTodayCount, 2);
 
     const history = await getMyQueueHistory(customerA._id, { page: 1, pageSize: 20 });
     assert.equal(history.items.length, 2);

@@ -11,6 +11,23 @@ import Barber from '../models/Barber.js';
 import { DEFAULT_SERVICE_MINUTES } from '../config/queueConfig.js';
 import { serviceDurationMinutes } from './analyticsService.js';
 
+function logStartServiceDiagnostic(details) {
+  console.warn('[queue:start:diagnostic]', JSON.stringify(details));
+}
+
+function startServiceError(status, code, message) {
+  const error = new AppError(status, message);
+  error.code = code;
+  return error;
+}
+
+const APP_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Manila',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 async function requireActiveService(shopId, serviceId) {
   // serviceId arrives from the request BODY here (not a route :param, so
   // validateObjectIdParam never sees it) — checked explicitly before it
@@ -589,6 +606,15 @@ function receiptUpdate(requestId, action, minutes = null) {
 export async function startService(shopId, barberId, entryId, requestId) {
   requireRequestId(requestId);
   const entry = await requireShopQueueEntry(shopId, entryId);
+  logStartServiceDiagnostic({
+    requestId,
+    barberId: String(barberId),
+    shopId: String(shopId),
+    targetEntryId: String(entry._id),
+    targetStatus: entry.status,
+    targetAssignedBarberId: entry.barberId ? String(entry.barberId) : null,
+    validation: 'start_request_received',
+  });
   const priorReceipt = findActionReceipt(entry, requestId, 'start');
   if (priorReceipt) return entry;
   if (entry.barberId && String(entry.barberId) !== String(barberId)) {
@@ -615,34 +641,162 @@ export async function startService(shopId, barberId, entryId, requestId) {
   const service = await Service.findOne({ _id: entry.serviceId, shopId }).select('estimatedDuration');
   const baseMinutes = service?.estimatedDuration || DEFAULT_SERVICE_MINUTES;
 
-  const alreadyServing = await QueueEntry.findOne({
+  const alreadyServing = await QueueEntry.find({
     barberId,
     status: { $in: ['IN_SERVICE', 'DELAYED', 'PAUSED'] },
     _id: { $ne: entryId },
-  });
-  if (alreadyServing) {
-    throw new AppError(409, 'This barber already has an active service.');
+  }).select('_id shopId barberId status queuePosition updatedAt').limit(20).lean();
+  if (alreadyServing.length) {
+    logStartServiceDiagnostic({
+      requestId,
+      barberId: String(barberId),
+      shopId: String(shopId),
+      targetEntryId: String(entry._id),
+      targetStatus: entry.status,
+      targetAssignedBarberId: entry.barberId ? String(entry.barberId) : null,
+      validation: 'active_service_found_before_reservation',
+      activeEntries: alreadyServing.map((active) => ({
+        id: String(active._id),
+        shopId: String(active.shopId),
+        barberId: String(active.barberId),
+        status: active.status,
+        queuePosition: active.queuePosition,
+        updatedAt: active.updatedAt,
+      })),
+    });
+    throw startServiceError(409, 'ACTIVE_SERVICE_EXISTS', 'This barber already has an active service.');
   }
 
-  // Reserve the barber atomically before claiming the queue entry. This
-  // makes both the break/start race and simultaneous starts safe.
-  const barberBeforeStart = await Barber.findOneAndUpdate(
-    { _id: barberId, shopId, status: 'ACTIVE', availability: { $in: ['AVAILABLE', 'OFFLINE'] } },
-    { $set: { availability: 'BUSY' } },
-    { new: false }
+  // Serialize starts for this barber while checking persisted service state.
+  // A lease lets an interrupted request recover without treating stale BUSY
+  // availability as proof that a service is still active.
+  const reservationTime = new Date();
+  const reservationExpiresAt = new Date(reservationTime.getTime() + 60_000);
+  const reservation = await Barber.findOneAndUpdate(
+    {
+      _id: barberId,
+      shopId,
+      status: 'ACTIVE',
+      $or: [
+        { 'serviceStartReservation.expiresAt': { $lte: reservationTime } },
+        { 'serviceStartReservation.expiresAt': { $in: [null] } },
+      ],
+    },
+    { $set: { serviceStartReservation: { requestId, expiresAt: reservationExpiresAt } } },
+    { new: true }
   );
-  if (!barberBeforeStart) {
+  const releaseReservation = () => Barber.updateOne(
+    { _id: barberId, shopId, 'serviceStartReservation.requestId': requestId },
+    { $unset: { serviceStartReservation: 1 } }
+  );
+
+  if (!reservation) {
     const latestEntry = await QueueEntry.findById(entry._id);
     const receipt = latestEntry && findActionReceipt(latestEntry, requestId, 'start');
     if (receipt) return latestEntry;
     const barber = await Barber.findOne({ _id: barberId, shopId });
     if (!barber || barber.status !== 'ACTIVE') throw new AppError(403, 'Your barber profile is not active.');
     if (barber.availability === 'ON_BREAK') throw new AppError(409, 'End your break before starting a service.');
-    throw new AppError(409, 'You already have an active service.');
+    const activeServices = await QueueEntry.find({
+      barberId,
+      status: { $in: ['IN_SERVICE', 'DELAYED', 'PAUSED'] },
+    }).select('_id shopId barberId status queuePosition updatedAt').limit(20).lean();
+    if (activeServices.length) {
+      logStartServiceDiagnostic({
+        requestId,
+        barberId: String(barberId),
+        shopId: String(shopId),
+        targetEntryId: String(entry._id),
+        targetStatus: entry.status,
+        targetAssignedBarberId: entry.barberId ? String(entry.barberId) : null,
+        barberAvailability: barber.availability,
+        validation: 'reservation_failed_active_service_found',
+        activeEntries: activeServices.map((active) => ({
+          id: String(active._id),
+          shopId: String(active.shopId),
+          barberId: String(active.barberId),
+          status: active.status,
+          queuePosition: active.queuePosition,
+          updatedAt: active.updatedAt,
+        })),
+      });
+      throw startServiceError(409, 'ACTIVE_SERVICE_EXISTS', 'You already have an active service.');
+    }
+    logStartServiceDiagnostic({
+      requestId,
+      barberId: String(barberId),
+      shopId: String(shopId),
+      targetEntryId: String(entry._id),
+      targetStatus: entry.status,
+      targetAssignedBarberId: entry.barberId ? String(entry.barberId) : null,
+      barberAvailability: barber.availability,
+      validation: 'reservation_unavailable_without_active_service',
+    });
+    throw new AppError(409, 'Another service start is in progress. Refresh the workspace and try again.');
+  }
+
+  const activeServiceAfterReservation = await QueueEntry.findOne({
+    barberId,
+    status: { $in: ['IN_SERVICE', 'DELAYED', 'PAUSED'] },
+    _id: { $ne: entryId },
+  });
+  if (activeServiceAfterReservation) {
+    await releaseReservation();
+    logStartServiceDiagnostic({
+      requestId,
+      barberId: String(barberId),
+      shopId: String(shopId),
+      targetEntryId: String(entry._id),
+      targetStatus: entry.status,
+      targetAssignedBarberId: entry.barberId ? String(entry.barberId) : null,
+      validation: 'active_service_found_after_reservation',
+      activeEntries: [{
+        id: String(activeServiceAfterReservation._id),
+        shopId: String(activeServiceAfterReservation.shopId),
+        barberId: String(activeServiceAfterReservation.barberId),
+        status: activeServiceAfterReservation.status,
+        queuePosition: activeServiceAfterReservation.queuePosition,
+        updatedAt: activeServiceAfterReservation.updatedAt,
+      }],
+    });
+    throw startServiceError(409, 'ACTIVE_SERVICE_EXISTS', 'This barber already has an active service.');
+  }
+
+  let startAvailability = reservation.availability;
+  if (startAvailability === 'BUSY') {
+    const reconciled = await Barber.findOneAndUpdate(
+      { _id: barberId, shopId, status: 'ACTIVE', availability: 'BUSY', 'serviceStartReservation.requestId': requestId },
+      { $set: { availability: 'AVAILABLE' } },
+      { new: true }
+    );
+    if (!reconciled) {
+      await releaseReservation();
+      throw new AppError(409, 'Your availability changed. Refresh the workspace and try again.');
+    }
+    startAvailability = 'AVAILABLE';
+  }
+
+  const barberBeforeStart = await Barber.findOneAndUpdate(
+    {
+      _id: barberId,
+      shopId,
+      status: 'ACTIVE',
+      availability: { $in: ['AVAILABLE', 'OFFLINE'] },
+      'serviceStartReservation.requestId': requestId,
+    },
+    { $set: { availability: 'BUSY' } },
+    { new: false }
+  );
+  if (!barberBeforeStart) {
+    await releaseReservation();
+    const barber = await Barber.findOne({ _id: barberId, shopId });
+    if (!barber || barber.status !== 'ACTIVE') throw new AppError(403, 'Your barber profile is not active.');
+    if (barber.availability === 'ON_BREAK') throw new AppError(409, 'End your break before starting a service.');
+    throw new AppError(409, 'Your availability changed. Refresh the workspace and try again.');
   }
   const releaseBarber = () => Barber.findOneAndUpdate(
-    { _id: barberId, shopId, availability: 'BUSY' },
-    { $set: { availability: barberBeforeStart.availability } }
+    { _id: barberId, shopId, availability: 'BUSY', 'serviceStartReservation.requestId': requestId },
+    { $set: { availability: startAvailability } }
   );
 
   const claimFilter = {
@@ -677,10 +831,12 @@ export async function startService(shopId, barberId, entryId, requestId) {
     );
   } catch (err) {
     await releaseBarber();
+    await releaseReservation();
     throw err;
   }
   if (!claimedEntry) {
     await releaseBarber();
+    await releaseReservation();
     throw new AppError(409, 'This customer is no longer eligible to start service. Refresh the queue and try again.');
   }
 
@@ -701,8 +857,11 @@ export async function startService(shopId, barberId, entryId, requestId) {
       { $set: { status: entry.status, barberId: entry.barberId || null, arrivedAt: entry.arrivedAt || null }, $pull: { actionReceipts: { requestId } } }
     );
     await releaseBarber();
+    await releaseReservation();
     throw err;
   }
+
+  await releaseReservation();
 
   await notifyQueueEntry(claimedEntry, {
     eventKey: `${entry._id}:service-started`,
@@ -919,6 +1078,7 @@ export async function applyDelay(shopId, barberId, entryId, minutes, requestId) 
  */
 export async function getBarberDashboard(shopId, barberId) {
   const serverNow = new Date();
+  const appToday = APP_DAY_FORMATTER.format(serverNow);
   const periodStart = new Date(Date.UTC(serverNow.getUTCFullYear(), serverNow.getUTCMonth(), serverNow.getUTCDate() - 6));
   const periodEnd = new Date(Date.UTC(serverNow.getUTCFullYear(), serverNow.getUTCMonth(), serverNow.getUTCDate() + 1));
   const [barber, shop, current, upNext, recentServiceLogs, assignedQueueWorkload] = await Promise.all([
@@ -982,6 +1142,12 @@ export async function getBarberDashboard(shopId, barberId) {
   const completedLogs = recentServiceLogs.filter((log) => (
     String(log.queueEntryId?.shopId) === String(shopId) && log.queueEntryId?.status === 'COMPLETED'
   ));
+  const completedTodayIds = new Set();
+  completedLogs.forEach((log) => {
+    const completionDate = APP_DAY_FORMATTER.format(log.endTime);
+    const queueEntryId = String(log.queueEntryId?._id || log.queueEntryId || '');
+    if (completionDate === appToday && queueEntryId) completedTodayIds.add(queueEntryId);
+  });
   const durationValues = completedLogs.map((log) => serviceDurationMinutes({ ...log, service: log.serviceId })).filter(Number.isFinite);
   const sortedDurations = [...durationValues].sort((left, right) => left - right);
   const medianDuration = sortedDurations.length
@@ -1007,6 +1173,7 @@ export async function getBarberDashboard(shopId, barberId) {
   const workload = {
     period: { from: workloadDays[0].date, to: workloadDays.at(-1).date },
     completedCount: completedLogs.length,
+    completedTodayCount: completedTodayIds.size,
     averageDurationMinutes: durationValues.length ? durationValues.reduce((sum, duration) => sum + duration, 0) / durationValues.length : null,
     medianDurationMinutes: medianDuration,
     durationSampleCount: durationValues.length,

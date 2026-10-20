@@ -1,3 +1,4 @@
+import NativeSelect from '../../components/ui/NativeSelect';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_BASE } from '../../api/httpClient';
@@ -147,9 +148,9 @@ function GuideDemo({ step, shops, shopsLoading, shopsError, images, imagesLoadin
     return (
       <div className={styles.serviceDemo}>
         <label className={styles.shopSelectLabel} htmlFor="guide-shop-select">Preview a shop’s services</label>
-        <select id="guide-shop-select" className={styles.shopSelect} value={exampleShop?.id || ''} onChange={(event) => onSelectShop(shops.find((shop) => String(shop.id) === event.target.value) || shops[0])}>
+        <NativeSelect id="guide-shop-select" className={styles.shopSelect} value={exampleShop?.id || ''} onChange={(event) => onSelectShop(shops.find((shop) => String(shop.id) === event.target.value) || shops[0])}>
           {shops.map((shop) => <option key={shop.id} value={shop.id}>{shop.name}</option>)}
-        </select>
+        </NativeSelect>
         <p className={styles.selectedShopName}>{exampleShop?.name}</p>
         {servicesLoading ? <p className={styles.demoState} role="status">Loading published services…</p>
           : servicesError ? <p className={styles.demoState} role="alert">Couldn’t load services: {servicesError.message}</p>

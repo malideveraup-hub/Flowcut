@@ -162,7 +162,7 @@ export default function ShopDetails() {
       <div className={styles.wrap}>
         <div className={styles.layout}>
           <div className={styles.mainCol}>
-            <section className={styles.hero} aria-labelledby="shop-name">
+            <section className={styles.hero} aria-labelledby="shop-name" data-scroll-reveal>
               <div className={`${styles.cover} ${hasShopCover ? styles.coverWithImage : ''}`}>
                 {hasShopCover
                   ? <img className={styles.coverImage} src={`${API_BASE}${shopImage.imageUrl}`} alt="" onError={() => setFailedCoverUrl(shopImage.imageUrl)} />
@@ -249,7 +249,7 @@ export default function ShopDetails() {
               </div>
             </section>
 
-            <section className={styles.servicesSection} aria-labelledby="services-title">
+            <section className={styles.servicesSection} aria-labelledby="services-title" data-scroll-reveal>
               <div className={styles.sectionHeading}>
                 <h2 id="services-title">Services</h2>
                 <span>{servicesLoading ? 'Loading…' : `${(services || []).length} ${(services || []).length === 1 ? 'service' : 'services'}`}</span>
@@ -260,7 +260,7 @@ export default function ShopDetails() {
                   <p className={styles.empty}>This shop hasn’t added any services yet.</p>
                 )}
                 {!servicesLoading && (services || []).map((service) => (
-                  <article className={styles.service} key={service.id}>
+                  <article className={styles.service} key={service.id} data-scroll-reveal>
                     <span className={styles.serviceIcon}><Icon name="barber" /></span>
                     <span className={styles.serviceInfo}>
                       <strong>{service.name}</strong>

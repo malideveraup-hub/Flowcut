@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync';
 import { fetchPublicShops } from '../../api/shopApi';
@@ -8,12 +8,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import BrandLogo from '../../components/ui/BrandLogo';
 import styles from './Landing.module.css';
 
-const STYLES = [
-  { name: 'Textured Crop', tag: 'Most picked', g1: '#783B3B', g2: '#783B3B' },
-  { name: 'Low Fade Pompadour', tag: 'Popular in PH', g1: '#20201E', g2: '#20201E' },
-  { name: 'Korean Perm Fringe', tag: 'Trending', g1: '#A58B66', g2: '#A58B66' },
-  { name: 'Skin Fade Undercut', tag: 'Popular in PH', g1: '#783B3B', g2: '#783B3B' },
-];
+const BarberPoleHero = lazy(() => import('../../components/BarberPoleHero'));
 
 const FREE_FEATURES = [
   'Browse public barbershops and current wait estimates',
@@ -51,11 +46,6 @@ function CheckIcon() {
 export default function Landing() {
   const { data: shops, loading, error, refetch } = useAsync(fetchPublicShops);
   const [query, setQuery] = useState('');
-  const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
-  const touchStartX = useRef(null);
 
   const filteredShops = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -64,39 +54,14 @@ export default function Landing() {
     return availableShops.filter((shop) => `${shop.name} ${shop.address || ''}`.toLowerCase().includes(normalized));
   }, [query, shops]);
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    if (!mediaQuery) return undefined;
-    const updatePreference = (event) => setReducedMotion(event.matches);
-    mediaQuery.addEventListener?.('change', updatePreference);
-    return () => mediaQuery.removeEventListener?.('change', updatePreference);
-  }, []);
-
-  useEffect(() => {
-    if (paused || hovered || reducedMotion) return undefined;
-    const timer = window.setInterval(() => setActive((current) => (current + 1) % STYLES.length), 4500);
-    return () => window.clearInterval(timer);
-  }, [hovered, paused, reducedMotion]);
-
-  function goTo(index) {
-    setActive((index + STYLES.length) % STYLES.length);
-  }
-
   function handleSearch(event) {
     event.preventDefault();
     setQuery((current) => current.trim());
   }
 
-  function handleCarouselKeyDown(event) {
-    if (event.key === 'ArrowLeft') goTo(active - 1);
-    if (event.key === 'ArrowRight') goTo(active + 1);
-  }
-
-  const automaticSlidesPaused = paused || reducedMotion;
-
   return (
     <div className={styles.landing}>
-      <section className={styles.hero} id="home" aria-labelledby="hero-title">
+      <section className={styles.hero} id="home" aria-labelledby="hero-title" data-scroll-reveal>
         <div className={styles.wrap}>
           <div className={styles.heroGrid}>
             <div className={styles.heroCopy}>
@@ -109,107 +74,16 @@ export default function Landing() {
               </div>
             </div>
 
-            <div
-              className={styles.showcase}
-              onMouseEnter={() => setHovered(true)}
-              onMouseLeave={() => setHovered(false)}
-              onFocus={() => setHovered(true)}
-              onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) setHovered(false);
-              }}
-              onKeyDown={handleCarouselKeyDown}
-              aria-label="Featured haircut styles"
-              aria-roledescription="carousel"
-              role="region"
-            >
-              <div
-                className={styles.stack}
-                onTouchStart={(event) => { touchStartX.current = event.touches[0].clientX; }}
-                onTouchEnd={(event) => {
-                  if (touchStartX.current === null) return;
-                  const deltaX = event.changedTouches[0].clientX - touchStartX.current;
-                  if (Math.abs(deltaX) > 40) goTo(active + (deltaX < 0 ? 1 : -1));
-                  touchStartX.current = null;
-                }}
-              >
-                {STYLES.map((style, index) => {
-                  let offset = (index - active + STYLES.length) % STYLES.length;
-                  if (offset > STYLES.length / 2) offset -= STYLES.length;
-                  const distance = Math.abs(offset);
-                  return (
-                    <button
-                      className={styles.styleCard}
-                      key={style.name}
-                      type="button"
-                      tabIndex={distance > 2 ? -1 : 0}
-                      aria-label={`Show ${style.name}`}
-                      aria-current={index === active ? 'true' : undefined}
-                      aria-hidden={distance > 2}
-                      onClick={() => goTo(index === active ? active + 1 : index)}
-                      style={{
-                        '--card-g1': style.g1,
-                        '--card-g2': style.g2,
-                        '--offset': offset,
-                        '--distance': distance,
-                        zIndex: 10 - distance,
-                        opacity: distance > 2 ? 0 : 1 - distance * 0.32,
-                        pointerEvents: distance > 2 ? 'none' : 'auto',
-                        filter: distance === 0 ? 'none' : `brightness(${1 - distance * 0.18})`,
-                      }}
-                    >
-                      <span className={styles.art} aria-hidden="true">
-                        <svg viewBox="0 0 340 430" preserveAspectRatio="xMidYMid slice">
-                          <circle cx="250" cy="90" r="120" fill="white" fillOpacity=".08" />
-                          <path d="M0 300 Q170 250 340 320 L340 430 L0 430 Z" fill="white" fillOpacity=".06" />
-                        </svg>
-                      </span>
-                      <span className={styles.shade} aria-hidden="true" />
-                      <span className={styles.cardInfo}>
-                        <span className={styles.styleTag}>{style.tag}</span>
-                        <span className={styles.styleName}>{style.name}</span>
-                        <span className={styles.styleLocation}>FlowCut Studio {'\u00b7'} Manila</span>
-                      </span>
-                    </button>
-                  );
-                })}
-                <button className={`${styles.carouselArrow} ${styles.prev}`} type="button" aria-label="Previous style" onClick={() => goTo(active - 1)}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
-                </button>
-                <button className={`${styles.carouselArrow} ${styles.next}`} type="button" aria-label="Next style" onClick={() => goTo(active + 1)}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-                </button>
-              </div>
-              <div className={styles.carouselControls} role="group" aria-label="Carousel controls">
-                {STYLES.map((style, index) => (
-                  <button
-                    key={style.name}
-                    type="button"
-                    className={`${styles.dot} ${index === active ? styles.dotActive : ''}`}
-                    aria-label={`Show style ${index + 1}: ${style.name}`}
-                    aria-current={index === active ? 'true' : undefined}
-                    onClick={() => goTo(index)}
-                  />
-                ))}
-                <button
-                  className={styles.playPause}
-                  type="button"
-                  aria-pressed={automaticSlidesPaused}
-                  aria-label={reducedMotion ? 'Automatic slides are disabled to respect reduced motion' : automaticSlidesPaused ? 'Play automatic slides' : 'Pause automatic slides'}
-                  disabled={reducedMotion}
-                  onClick={() => setPaused((value) => !value)}
-                >
-                  {automaticSlidesPaused
-                    ? <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
-                    : <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5h3v14H7zM14 5h3v14h-3z" /></svg>}
-                </button>
-              </div>
-              <p className={styles.swipeHint}>Swipe or tap to explore styles</p>
+            <div className={styles.showcase}>
+              <Suspense fallback={<div className={styles.poleFallback} aria-hidden="true" />}>
+                <BarberPoleHero />
+              </Suspense>
             </div>
           </div>
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.howSection}`} aria-labelledby="how-title">
+      <section className={`${styles.section} ${styles.howSection}`} aria-labelledby="how-title" data-scroll-reveal>
         <div className={styles.wrap}>
           <div className={styles.sectionIntro}>
             <p className={styles.sectionLabel}>How it works</p>
@@ -224,7 +98,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.shopSection}`} id="shops" aria-labelledby="shops-title">
+      <section className={`${styles.section} ${styles.shopSection}`} id="shops" aria-labelledby="shops-title" data-scroll-reveal>
         <div className={styles.wrap}>
           <div className={styles.sectionHeading}>
             <div>
@@ -260,7 +134,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.plansSection}`} aria-labelledby="plans-title">
+      <section className={`${styles.section} ${styles.plansSection}`} aria-labelledby="plans-title" data-scroll-reveal>
         <div className={styles.wrap}>
           <div className={styles.sectionIntro}>
             <span className={styles.comingSoon}>FlowCut Plus <span aria-hidden="true">{'\u00b7'}</span> Coming soon</span>
@@ -291,7 +165,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.faqSection}`} aria-labelledby="faq-title">
+      <section className={`${styles.section} ${styles.faqSection}`} aria-labelledby="faq-title" data-scroll-reveal>
         <div className={`${styles.wrap} ${styles.faqGrid}`}>
           <div className={styles.faqIntro}>
             <p className={styles.sectionLabel}>FAQ</p>
@@ -309,7 +183,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.ownerSection}`} aria-labelledby="owner-title">
+      <section className={`${styles.section} ${styles.ownerSection}`} aria-labelledby="owner-title" data-scroll-reveal>
         <div className={`${styles.wrap} ${styles.ownerCard}`}>
           <div>
             <p className={styles.sectionLabel}>For barbershop owners</p>

@@ -121,6 +121,25 @@ export async function unregisterQueuePushSubscription() {
   }
 }
 
+export async function disableQueueBrowserPush() {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return { removedFromServer: false };
+  }
+
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  const subscription = await registration?.pushManager?.getSubscription();
+  if (!subscription) return { removedFromServer: true };
+
+  let removedFromServer = true;
+  try {
+    await removeMyPushSubscription(subscription.endpoint);
+  } catch {
+    removedFromServer = false;
+  }
+  await subscription.unsubscribe();
+  return { removedFromServer };
+}
+
 function playAlertSound() {
   if (!alertAudioContext || alertAudioContext.state !== 'running') return false;
 
